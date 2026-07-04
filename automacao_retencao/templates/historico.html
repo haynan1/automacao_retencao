@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Histórico · Retenções FMS{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-end justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <p class="display-eyebrow mb-1">Registro local</p>
+    <h1 class="hero" style="font-size: clamp(1.6rem, 3vw, 2.2rem);">Histórico de operações</h1>
+    <p class="lead-muted mt-2">Cada preenchimento processado fica registrado <strong>apenas nesta máquina</strong> (não vai para o GitHub).</p>
+  </div>
+  <a href="{{ url_for('index') }}" class="btn btn-primary"><i class="bi bi-plus-lg me-1"></i>Novo processamento</a>
+</div>
+
+{% if operacoes %}
+<div class="table-wrap">
+  <div class="table-responsive" style="max-height: none;">
+    <table class="table align-middle">
+      <thead>
+        <tr>
+          <th>Data / hora</th>
+          <th>Secretaria</th>
+          <th>Comp.</th>
+          <th>Aba</th>
+          <th class="text-end">Lido</th>
+          <th class="text-end">Preenchido</th>
+          <th class="text-end">Pendente</th>
+          <th class="text-center">Confere</th>
+          <th class="text-end">Células</th>
+          <th class="text-end">Arquivo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for op in operacoes %}
+        <tr>
+          <td class="small mono">{{ op.datahora }}</td>
+          <td class="small">{{ op.perfil_nome or op.perfil }}</td>
+          <td class="small">{{ op.competencia or '—' }}</td>
+          <td class="small">{{ op.aba_destino }}</td>
+          <td class="text-end mono small">{{ op.total_lido|moeda }}</td>
+          <td class="text-end mono small value-pos">{{ op.total_preenchido|moeda }}</td>
+          <td class="text-end mono small" style="color: {{ 'var(--danger)' if (op.total_pendente|float) > 0 else 'var(--muted)' }}">{{ op.total_pendente|moeda }}</td>
+          <td class="text-center">
+            {% if op.confere %}<span class="chip ok"><i class="bi bi-check"></i></span>
+            {% else %}<span class="chip danger"><i class="bi bi-x"></i></span>{% endif %}
+          </td>
+          <td class="text-end mono small">{{ op.qtd_celulas }}</td>
+          <td class="text-end">
+            {% if op.disponivel %}
+              <a href="{{ url_for('historico_baixar', nome=op.output_nome) }}" class="btn btn-sm btn-outline-light" title="Baixar {{ op.output_nome }}"><i class="bi bi-download"></i></a>
+            {% else %}
+              <span class="text-secondary small" title="Arquivo removido do disco">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<p class="text-secondary small mt-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Mostrando as {{ operacoes|length }} operações mais recentes. Arquivos de saída são removidos do disco após 7 dias; o registro permanece.
+</p>
+{% else %}
+<div class="panel-pad panel text-center">
+  <div class="upload-icon mx-auto mb-3" style="width:64px;height:64px;font-size:1.8rem;"><i class="bi bi-clock-history"></i></div>
+  <h2 class="h5">Nenhuma operação ainda</h2>
+  <p class="text-secondary">Assim que você processar um preenchimento, ele aparece aqui.</p>
+  <a href="{{ url_for('index') }}" class="btn btn-primary mt-2"><i class="bi bi-arrow-right me-1"></i>Começar</a>
+</div>
+{% endif %}
+{% endblock %}

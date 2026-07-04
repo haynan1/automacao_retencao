@@ -24,6 +24,9 @@ automacao_retencao/logs/*
 !automacao_retencao/outputs/.gitkeep
 !automacao_retencao/logs/.gitkeep
 
+# ==== Histórico local de operações (SÓ nesta máquina, nunca no GitHub) ====
+automacao_retencao/historico/
+
 # ==== IDE / editores ====
 .idea/
 .vscode/

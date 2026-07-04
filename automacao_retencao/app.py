@@ -33,7 +33,7 @@ from flask import (
 from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
 
-from services import conferencia, mapeador, perfis, preenchimento
+from services import conferencia, historico, mapeador, perfis, preenchimento
 from services.parser_listagem import extrair_lancamentos
 from services.utils import (
     OUTPUTS_DIR,
@@ -538,6 +538,33 @@ def processar(sid):
             "folhas_desconhecidas": pendencias_map["folhas_desconhecidas"],
         }
         salvar_sessao(sid, dados)
+
+        # --- Histórico local (nunca vai para o git) ---
+        pendente = (rec["total_sem_vinculo"] + rec["total_setor_nao_mapeado"]
+                    + rec["total_folha_desconhecida"])
+        historico.registrar_operacao({
+            "sid": sid,
+            "perfil": perfil,
+            "perfil_nome": dados.get("perfil_nome"),
+            "competencia": dados["competencia"],
+            "aba_destino": aba_destino,
+            "arquivo_origem": dados["arquivo_origem_nome"],
+            "arquivo_modelo": dados["arquivo_modelo_nome"],
+            "output_nome": nome_saida,
+            "qtd_lancamentos": len(lancamentos),
+            "qtd_celulas": len(relatorio["preenchidos"]),
+            "total_lido": rec["total_lido"],
+            "total_preenchido": rec["total_preenchido"],
+            "total_fora_escopo": rec["total_fora_escopo"],
+            "total_pendente": pendente,
+            "confere": rec["confere"],
+            "pendencias": {
+                "lotacoes_nao_mapeadas": len(pendencias_map["lotacoes_nao_mapeadas"]),
+                "rubricas_sem_vinculo": len(pendencias_map["rubricas_sem_vinculo"]),
+                "folhas_desconhecidas": len(pendencias_map["folhas_desconhecidas"]),
+            },
+        })
+
         log.info("Processamento concluído sid=%s células=%d confere=%s saída=%s",
                  sid, len(relatorio["preenchidos"]), rec["confere"], nome_saida)
         return redirect(url_for("resultado", sid=sid))
@@ -582,6 +609,27 @@ def download(sid):
     if OUTPUTS_DIR.resolve() not in resolvido.parents:
         abort(403)
     return send_file(resolvido, as_attachment=True, download_name=dados["output_nome"])
+
+
+@app.route("/historico")
+def historico_view():
+    operacoes = historico.listar_operacoes()
+    # Marca quais saídas ainda existem em disco (podem ter sido limpas após 7 dias).
+    for op in operacoes:
+        nome = op.get("output_nome") or ""
+        op["disponivel"] = bool(nome) and (OUTPUTS_DIR / nome).exists()
+    return render_template("historico.html", operacoes=operacoes)
+
+
+@app.route("/historico/baixar/<nome>")
+def historico_baixar(nome):
+    seguro = secure_filename(nome)
+    if not seguro:
+        abort(404)
+    caminho = (OUTPUTS_DIR / seguro).resolve()
+    if OUTPUTS_DIR.resolve() not in caminho.parents or not caminho.exists():
+        abort(404)
+    return send_file(caminho, as_attachment=True, download_name=seguro)
 
 
 @app.errorhandler(413)
