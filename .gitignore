@@ -34,3 +34,6 @@ automacao_retencao/logs/*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ==== Dados de teste ====
+arquivos_base_temp

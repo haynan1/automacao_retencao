@@ -47,11 +47,17 @@ Acesse: **http://127.0.0.1:5000**
 3. Clique em **Analisar arquivos**.
 4. Na **pré-visualização**, confira competência, lançamentos, lotações e rubricas
    detectadas — e os avisos de itens não mapeados.
-5. Na tela de **mapeamento**, associe cada lotação a um setor da planilha
-   (há sugestão automática). Escolha a **aba de destino** (sugerida pela
-   competência) e, se quiser, marque para **salvar o mapeamento**.
+5. Na tela de **mapeamento**, confirme os **dois vínculos** (com sugestão
+   automática e menus suspensos):
+   - **Eixo 1 — Lotação → Setor**: cada lotação do relatório para um setor da planilha.
+   - **Eixo 2 — Evento/Rubrica → Coluna**: cada evento do relatório para uma coluna
+     do modelo, ou marque **“Fora de escopo”** para não preencher.
+   Escolha a **aba de destino** e, se quiser, marque para **aprender/salvar os
+   vínculos** (ficam prontos para os próximos meses).
 6. Clique em **Processar e preencher**.
-7. Na tela final, revise os totais e as **pendências**, e **baixe** o XLSX.
+7. Na tela final, confira a **reconciliação** (`total lido = preenchido + fora de
+   escopo + sem vínculo + setor não mapeado`, batendo ao centavo), os totais e as
+   **pendências**, e **baixe** o XLSX.
 
 ## 4. Observações importantes
 
@@ -73,14 +79,15 @@ Acesse: **http://127.0.0.1:5000**
 automacao_retencao/
 ├── app.py                 # Camada web (Flask) — apenas orquestração
 ├── config/                # Mapeamentos editáveis (JSON, sem código)
-│   ├── mapeamento_lotacoes.json
-│   └── mapeamento_rubricas.json
+│   ├── mapeamento_lotacoes.json        # lotação → setor (aprendido)
+│   ├── mapeamento_rubricas.json        # regras de rubrica + "fora de escopo"
+│   └── vinculo_rubrica_coluna.json     # evento/rubrica → coluna (aprendido)
 ├── services/              # Regra de negócio, isolada do Flask
-│   ├── parser_listagem.py # Lê o relatório de origem (robusto a colunas)
+│   ├── parser_listagem.py # Lê o relatório de origem (merged-aware, anti-ruído)
 │   ├── normalizador.py    # Texto, folha e rubrica normalizados
-│   ├── mapeador.py        # Lotação→setor, descrição→rubrica, pendências
+│   ├── mapeador.py        # Dois eixos de vínculo + aprendizado + pendências
 │   ├── preenchimento.py   # Localiza blocos/colunas e preenche o modelo
-│   ├── conferencia.py     # Agregação, totais e aba de conferência
+│   ├── conferencia.py     # Agregação, reconciliação e aba de conferência
 │   └── utils.py           # Pastas, logs, nomes e sessão em disco
 ├── templates/             # Jinja2 + Bootstrap 5 (dark-first)
 ├── static/style.css
@@ -89,13 +96,20 @@ automacao_retencao/
 
 ### Decisões de projeto
 
+- **Leitura *merged-aware***: o relatório real usa células mescladas e a coluna
+  Descrição vem deslocada em relação ao cabeçalho. Cada campo é lido pelo segmento
+  mesclado com maior **sobreposição** à faixa do cabeçalho — imune a deslocamentos.
+  Banners/rodapés/resumo são descartados por estrutura (o mesmo segmento cobre
+  Descrição e Folha ⇒ não é linha tabular).
 - **Detecção dinâmica**: setores, colunas de rubrica e linhas de tipo são
-  localizados pela *estrutura* da planilha, não por coordenadas fixas — o layout
-  pode mudar de mês para mês.
-- **Colunas por cabeçalho**: no relatório de origem, as posições das colunas são
-  descobertas lendo os rótulos (`Mat.`, `Descrição`, `Valor`, …), não pela letra.
-- **`Decimal`** para todo valor monetário; totais são calculados na aplicação,
-  sem depender do recálculo do Excel.
+  localizados pela *estrutura* da planilha, não por coordenadas fixas.
+- **Dois eixos de vínculo com aprendizado**: lotação→setor e evento/rubrica→coluna,
+  ambos com sugestão automática, menu suspenso e persistência em JSON.
+- **Colunas do modelo = fonte da verdade**: nunca se escreve numa coluna que não
+  exista; rubricas sem coluna viram pendência ou “fora de escopo”, nunca erro mudo.
+- **Reconciliação exata**: `total lido = preenchido + fora de escopo + sem vínculo
+  + setor não mapeado`. Se não bater ao centavo, a tela avisa.
+- **`Decimal`** para todo valor monetário; totais calculados na aplicação.
 - **Mapeamentos em JSON**: manutenção sem tocar no código.
 - **Segurança**: `secure_filename`, limite de 30 MB, apenas `.xlsx`, uploads e
   saídas restritos às suas pastas, sem execução de macros.
