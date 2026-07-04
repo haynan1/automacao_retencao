@@ -7,6 +7,7 @@ processamento -> resultado. Toda a regra de negócio vive em services/.
 from __future__ import annotations
 
 import os
+import re
 import traceback
 from decimal import Decimal
 from pathlib import Path
@@ -130,6 +131,55 @@ def index():
         perfil_padrao=perfis.slug_padrao(),
         moldes=moldes,
     )
+
+
+@app.route("/secretarias")
+def secretarias():
+    lista = perfis.listar_perfis()
+    return render_template(
+        "secretarias.html",
+        perfis=lista,
+        padrao=perfis.slug_padrao(),
+        moldes={p["slug"]: perfis.info_molde(p["slug"]) for p in lista},
+    )
+
+
+@app.route("/secretarias/salvar", methods=["POST"])
+def secretarias_salvar():
+    nome = (request.form.get("nome") or "").strip()
+    slug = (request.form.get("slug") or "").strip()
+    deteccao = [
+        termo.strip()
+        for termo in re.split(r"[,\n;]", request.form.get("deteccao") or "")
+        if termo.strip()
+    ]
+    if not nome:
+        return render_template(
+            "erro.html",
+            titulo="Nome obrigatorio",
+            mensagem="Informe o nome da secretaria.",
+        ), 400
+
+    slug_final = slug if (slug and perfis.perfil_valido(slug)) else None
+    perfis.registrar_perfil(nome, deteccao=deteccao, slug=slug_final)
+    return redirect(url_for("secretarias"))
+
+
+@app.route("/secretarias/<slug>/padrao", methods=["POST"])
+def secretarias_padrao(slug):
+    perfis.definir_padrao(slug)
+    return redirect(url_for("secretarias"))
+
+
+@app.route("/secretarias/<slug>/remover", methods=["POST"])
+def secretarias_remover(slug):
+    if not perfis.remover_perfil(slug):
+        return render_template(
+            "erro.html",
+            titulo="Nao foi possivel remover",
+            mensagem="Nao da para remover o perfil padrao nem o ultimo.",
+        ), 400
+    return redirect(url_for("secretarias"))
 
 
 @app.route("/analisar", methods=["POST"])

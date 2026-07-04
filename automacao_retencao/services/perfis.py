@@ -111,6 +111,31 @@ def registrar_perfil(nome: str, deteccao: list[str] | None = None, slug: str | N
     return slug
 
 
+def definir_padrao(slug: str) -> None:
+    """Define o perfil padrao. Ignora slugs inexistentes."""
+    if not perfil_valido(slug):
+        return
+    reg = _ler_registro()
+    reg["padrao"] = slug
+    _salvar_registro(reg)
+
+
+def remover_perfil(slug: str) -> bool:
+    """Remove o perfil do registro sem apagar dados em disco."""
+    reg = _ler_registro()
+    if slug == reg.get("padrao") or len(reg.get("perfis", [])) <= 1:
+        return False
+
+    antes = len(reg["perfis"])
+    reg["perfis"] = [p for p in reg["perfis"] if p["slug"] != slug]
+    if len(reg["perfis"]) == antes:
+        return False
+
+    _salvar_registro(reg)
+    log.info("Perfil '%s' removido do registro (dados preservados em disco).", slug)
+    return True
+
+
 def detectar_perfil(banners: list[str]) -> str | None:
     """Sugere um perfil a partir dos banners/cabecalho da Listagem."""
     if not banners:

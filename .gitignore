@@ -38,5 +38,8 @@ desktop.ini
 # ==== Dados de teste ====
 arquivos_base_temp
 
+# ==== Handoffs / notas locais de desenvolvimento ====
+docs/
+
 # ==== Backups de molde gerados em runtime ====
 *.bak.xlsx

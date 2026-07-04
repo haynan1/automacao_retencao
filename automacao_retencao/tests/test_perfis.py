@@ -30,6 +30,31 @@ def test_registrar_e_editar_nome(perfis_tmp):
     assert perfis.detectar_perfil(["... EDUCACAO ..."]) == slug
 
 
+def test_definir_padrao(perfis_tmp):
+    slug = perfis.registrar_perfil("Secretaria de Educacao", deteccao=["EDUCACAO"])
+    perfis.definir_padrao(slug)
+    assert perfis.slug_padrao() == slug
+
+    perfis.definir_padrao("inexistente")
+    assert perfis.slug_padrao() == slug
+
+
+def test_remover_perfil_bloqueios_e_sucesso(perfis_tmp):
+    assert perfis.remover_perfil("saude") is False
+
+    educacao = perfis.registrar_perfil("Secretaria de Educacao")
+    cultura = perfis.registrar_perfil("Secretaria de Cultura")
+
+    assert perfis.remover_perfil("saude") is False
+    assert perfis.remover_perfil("inexistente") is False
+    assert perfis.remover_perfil(educacao) is True
+    assert perfis.perfil_valido(educacao) is False
+    assert perfis.perfil_valido(cultura) is True
+
+    assert perfis.remover_perfil(cultura) is True
+    assert perfis.remover_perfil("saude") is False
+
+
 def test_vinculos_isolados_por_perfil(perfis_tmp):
     mapeador.salvar_vinculos("saude", {"evento x": "CEF"})
     mapeador.salvar_vinculos("educacao", {"evento x": mapeador.IGNORAR})
