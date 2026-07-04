@@ -11,6 +11,7 @@ import re
 import traceback
 from decimal import Decimal
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Carrega variáveis de um arquivo .env, se existir (opcional).
 try:
@@ -56,6 +57,23 @@ app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 criar_pastas()
 log = configurar_logs()
 limpar_temporarios()  # retenção: remove uploads/sessões >24h e saídas >7d
+
+
+@app.before_request
+def _bloqueia_origem_externa():
+    """Barra requisições que mudam estado vindas de outra origem (drive-by).
+
+    Como o app não tem auth e roda em localhost, um site aberto no navegador
+    poderia POSTar para 127.0.0.1:5000. Só aceitamos POST/etc. cujo Origin
+    seja a própria origem do app (ou ausente — curl, form same-origin).
+    """
+    if request.method in ("GET", "HEAD", "OPTIONS"):
+        return None
+    origin = request.headers.get("Origin")
+    if origin and urlparse(origin).netloc != request.host:
+        log.warning("Origem externa bloqueada: %s (host=%s)", origin, request.host)
+        abort(403)
+    return None
 
 
 # ---------------------------------------------------------------------------

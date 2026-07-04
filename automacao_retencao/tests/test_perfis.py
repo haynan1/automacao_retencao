@@ -55,6 +55,15 @@ def test_remover_perfil_bloqueios_e_sucesso(perfis_tmp):
     assert perfis.remover_perfil("saude") is False
 
 
+def test_slug_guard_rejeita_traversal(perfis_tmp):
+    import pytest
+    for ruim in ("../../etc", "a/b", "..", "MAIUSC", "", "com espaco"):
+        with pytest.raises(ValueError):
+            perfis.caminho_molde(ruim)
+    # slug válido não levanta
+    assert perfis.caminho_vinculos("educacao-2").name == "vinculo_rubrica_coluna.json"
+
+
 def test_vinculos_isolados_por_perfil(perfis_tmp):
     mapeador.salvar_vinculos("saude", {"evento x": "CEF"})
     mapeador.salvar_vinculos("educacao", {"evento x": mapeador.IGNORAR})

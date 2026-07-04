@@ -41,6 +41,19 @@ _REGISTRO_PADRAO = {
 }
 
 _RE_SLUG = re.compile(r"[^a-z0-9]+")
+# Forma canonica de um slug seguro (usado como nome de pasta).
+_RE_SLUG_OK = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+
+
+def _slug_seguro(slug: str) -> str:
+    """Garante que o slug e um nome de pasta seguro (sem path traversal).
+
+    Defesa em profundidade: os callers atuais ja sanitizam, mas nenhum
+    caminho de perfil e montado com um slug de formato invalido.
+    """
+    if not isinstance(slug, str) or not _RE_SLUG_OK.fullmatch(slug):
+        raise ValueError(f"slug de perfil inválido: {slug!r}")
+    return slug
 
 
 # ---------------------------------------------------------------------------
@@ -153,13 +166,13 @@ def detectar_perfil(banners: list[str]) -> str | None:
 # ---------------------------------------------------------------------------
 
 def _dir_config(slug: str) -> Path:
-    d = PERFIS_CONFIG_DIR / slug
+    d = PERFIS_CONFIG_DIR / _slug_seguro(slug)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
 def _dir_modelo(slug: str) -> Path:
-    d = PERFIS_MODELOS_DIR / slug
+    d = PERFIS_MODELOS_DIR / _slug_seguro(slug)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
