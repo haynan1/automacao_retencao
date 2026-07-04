@@ -40,6 +40,7 @@ arquivos_base_temp
 
 # ==== Handoffs / notas locais de desenvolvimento ====
 docs/
+docs
 
 # ==== Backups de molde gerados em runtime ====
 *.bak.xlsx
