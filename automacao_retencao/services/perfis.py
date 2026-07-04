@@ -222,3 +222,22 @@ def definir_molde(slug: str, origem: str | Path, nome_original: str) -> None:
     }
     with _caminho_molde_meta(slug).open("w", encoding="utf-8") as fh:
         json.dump(meta, fh, ensure_ascii=False, indent=2)
+
+
+def remover_molde(slug: str) -> bool:
+    """Remove o molde fixo atual e seus metadados. Mantem backups no disco."""
+    if not perfil_valido(slug):
+        return False
+
+    removido = False
+    for caminho in (caminho_molde(slug), _caminho_molde_meta(slug)):
+        if not caminho.exists():
+            continue
+        try:
+            caminho.unlink()
+            removido = True
+        except OSError as exc:
+            log.warning("Nao foi possivel remover '%s': %s", caminho, exc)
+    if removido:
+        log.info("Molde fixo do perfil '%s' removido.", slug)
+    return removido

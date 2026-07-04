@@ -111,7 +111,17 @@ def _detectar_modelo(caminho_modelo: str, aba_preferida: str | None):
         blocos = preenchimento.localizar_blocos_setores(ws)
         setores = [b["setor"] for b in blocos]
         colunas = preenchimento.listar_colunas_modelo(ws)
-        return setores, colunas, abas, alvo
+        abas_compativeis = []
+        for nome in abas:
+            if "CONFER" in nome.upper():
+                continue
+            ws_aba = wb[nome]
+            blocos_aba = preenchimento.localizar_blocos_setores(ws_aba)
+            setores_aba = [b["setor"] for b in blocos_aba]
+            colunas_aba = preenchimento.listar_colunas_modelo(ws_aba)
+            if setores_aba == setores and colunas_aba == colunas:
+                abas_compativeis.append(nome)
+        return setores, colunas, abas_compativeis or ([alvo] if alvo else abas), alvo
     finally:
         wb.close()
 
@@ -179,6 +189,18 @@ def secretarias_remover(slug):
             titulo="Nao foi possivel remover",
             mensagem="Nao da para remover o perfil padrao nem o ultimo.",
         ), 400
+    return redirect(url_for("secretarias"))
+
+
+@app.route("/secretarias/<slug>/molde/limpar", methods=["POST"])
+def secretarias_limpar_molde(slug):
+    if not perfis.perfil_valido(slug):
+        return render_template(
+            "erro.html",
+            titulo="Secretaria invalida",
+            mensagem="Nao foi possivel localizar a secretaria informada.",
+        ), 400
+    perfis.remover_molde(slug)
     return redirect(url_for("secretarias"))
 
 

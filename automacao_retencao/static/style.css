@@ -54,6 +54,46 @@ body {
   letter-spacing: -0.01em;
 }
 
+/* Scrollbars discretos e consistentes com o tema do sistema. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 152, 173, 0.55) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(139, 152, 173, 0.36);
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(139, 152, 173, 0.62);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+html[data-bs-theme="light"] * {
+  scrollbar-color: rgba(91, 102, 117, 0.48) transparent;
+}
+html[data-bs-theme="light"] *::-webkit-scrollbar-thumb {
+  background: rgba(91, 102, 117, 0.28);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+html[data-bs-theme="light"] *::-webkit-scrollbar-thumb:hover {
+  background: rgba(91, 102, 117, 0.52);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
 /* Luz ambiente cinematográfica ao fundo. */
 .ambient {
   position: fixed;
@@ -132,6 +172,18 @@ input[type="file"] { display: none; }
 }
 .opt-modelo:hover { border-color: var(--accent); }
 .opt-modelo:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.opt-modelo.disabled {
+  cursor: not-allowed;
+  opacity: 0.72;
+  border-style: dashed;
+}
+.opt-modelo.disabled:hover {
+  border-color: var(--border);
+}
+.opt-modelo.disabled:has(input:checked) {
+  border-color: var(--border);
+  background: var(--surface);
+}
 .upload-inline {
   border: 1px dashed var(--border);
   cursor: pointer;
@@ -185,6 +237,7 @@ input[type="file"] { display: none; }
 .chip.ok { color: var(--success); border-color: rgba(52,211,153,0.35); background: rgba(52,211,153,0.08); }
 .chip.warn { color: var(--warn); border-color: rgba(251,191,36,0.35); background: rgba(251,191,36,0.08); }
 .chip.danger { color: var(--danger); border-color: rgba(248,113,113,0.35); background: rgba(248,113,113,0.08); }
+.chip-compact { max-width: 100%; overflow-wrap: anywhere; }
 
 .mono { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 .value-pos { color: var(--text); font-weight: 600; }
@@ -198,6 +251,14 @@ input[type="file"] { display: none; }
 }
 .btn-lg { padding: 0.8rem 1.6rem; }
 .btn-outline-light { border-radius: 12px; }
+.btn-danger-soft {
+  --bs-btn-color: var(--danger);
+  --bs-btn-border-color: rgba(248,113,113,0.35);
+  --bs-btn-hover-bg: rgba(248,113,113,0.12);
+  --bs-btn-hover-color: var(--danger);
+  --bs-btn-hover-border-color: rgba(248,113,113,0.55);
+  box-shadow: none;
+}
 
 .form-select, .form-control {
   background: var(--surface-2); border-color: var(--border); color: var(--text); border-radius: 10px;
@@ -218,3 +279,164 @@ input[type="file"] { display: none; }
 
 .section-title { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 600; }
 hr.soft { border-color: var(--border); opacity: 1; }
+
+/* Gestao de secretarias */
+.secretarias-page .lead-muted { max-width: 54ch; }
+.secretarias-list {
+  display: grid;
+  gap: 0.9rem;
+}
+.secretaria-item {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(420px, 1.7fr) 130px;
+  gap: 1.1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.026), rgba(255, 255, 255, 0.012)),
+    var(--surface);
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+.secretaria-item:hover {
+  border-color: rgba(79, 140, 255, 0.34);
+}
+.secretaria-name {
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.secretaria-main,
+.secretaria-block,
+.secretaria-actions {
+  min-width: 0;
+}
+.secretaria-main {
+  padding-left: 0.15rem;
+}
+.secretaria-meta {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.78fr);
+  gap: 0.75rem;
+}
+.secretaria-block {
+  min-height: 94px;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: rgba(10, 14, 23, 0.2);
+}
+.secretaria-label {
+  display: block;
+  margin-bottom: 0.55rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 650;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+.secretaria-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.secretaria-actions .btn,
+.secretaria-actions form {
+  width: 100%;
+}
+.secretaria-actions .btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  white-space: nowrap;
+  min-height: 32px;
+  padding-left: 0.65rem;
+  padding-right: 0.65rem;
+}
+.secretaria-actions .btn-editar {
+  border-color: rgba(231, 236, 245, 0.72);
+  color: var(--text);
+  font-weight: 650;
+}
+.secretaria-form {
+  position: sticky;
+  top: 6rem;
+}
+.secretaria-modal {
+  background: linear-gradient(180deg, var(--surface), var(--surface-2));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+.secretaria-modal .modal-header,
+.secretaria-modal .modal-footer {
+  border-color: var(--border-soft);
+  padding: 1.25rem 1.5rem;
+}
+.secretaria-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.secretaria-modal-header .modal-title {
+  margin: 0;
+  min-width: 0;
+}
+.secretaria-modal-header .btn {
+  flex: 0 0 auto;
+}
+.secretaria-modal .modal-body {
+  padding: 1.5rem;
+}
+.secretaria-modal #confirmacao-mensagem {
+  color: var(--text);
+  line-height: 1.45;
+}
+.modal-backdrop {
+  --bs-backdrop-opacity: 0.72;
+}
+
+html[data-bs-theme="light"] .secretaria-item {
+  background: rgba(15, 23, 42, 0.018);
+}
+html[data-bs-theme="light"] .secretaria-block {
+  background: rgba(248, 250, 252, 0.68);
+}
+
+@media (max-width: 1199.98px) {
+  .secretaria-form { position: static; }
+}
+
+@media (max-width: 991.98px) {
+  .secretaria-item {
+    grid-template-columns: 1fr;
+  }
+  .secretaria-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .secretaria-actions .btn,
+  .secretaria-actions form {
+    width: auto;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .secretaria-meta {
+    grid-template-columns: 1fr;
+  }
+  .secretaria-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .secretaria-actions .btn,
+  .secretaria-actions form {
+    width: 100%;
+  }
+}

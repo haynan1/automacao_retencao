@@ -66,7 +66,7 @@
                 <input class="form-check-input mt-1" type="radio" name="fonte_modelo" value="fixo" id="fonte-fixo">
                 <span>
                   <span class="fw-semibold d-block">Usar molde fixo</span>
-                  <span class="text-secondary small" id="molde-fixo-label">—</span>
+                  <span class="text-secondary small" id="molde-fixo-label">Sem molde fixo cadastrado</span>
                 </span>
               </label>
               <label class="opt-modelo d-flex align-items-start gap-2 p-2 rounded" for="fonte-upload">
@@ -134,11 +134,14 @@
   function refreshMolde() {
     const info = MOLDES[perfilSel.value];
     if (info) {
-      optFixo.style.display = '';
+      optFixo.classList.remove('disabled');
+      rFixo.disabled = false;
       labelFixo.textContent = info.nome_original + (info.definido_em ? ' · definido em ' + info.definido_em : '');
       if (!rUpload.checked) { rFixo.checked = true; }
     } else {
-      optFixo.style.display = 'none';
+      optFixo.classList.add('disabled');
+      rFixo.disabled = true;
+      labelFixo.textContent = 'Sem molde fixo cadastrado';
       rUpload.checked = true;
     }
     bloco.classList.toggle('d-none', rFixo.checked);

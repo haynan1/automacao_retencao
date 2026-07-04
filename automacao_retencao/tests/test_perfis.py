@@ -74,3 +74,21 @@ def test_molde_por_perfil_e_backup(perfis_tmp, tmp_path):
     perfis.definir_molde("saude", src, "RETENCAO2.xlsx")
     backups = list(perfis.caminho_molde("saude").parent.glob("*.bak.xlsx"))
     assert len(backups) == 1
+
+
+def test_remover_molde_limpa_atual_e_metadados(perfis_tmp, tmp_path):
+    from openpyxl import Workbook
+    src = tmp_path / "m.xlsx"
+    Workbook().save(src)
+
+    perfis.definir_molde("saude", src, "RETENCAO.xlsx")
+    meta = perfis.caminho_molde("saude").with_suffix(".json")
+    assert perfis.existe_molde("saude") is True
+    assert meta.exists() is True
+
+    assert perfis.remover_molde("saude") is True
+    assert perfis.existe_molde("saude") is False
+    assert meta.exists() is False
+
+    assert perfis.remover_molde("saude") is False
+    assert perfis.remover_molde("inexistente") is False
