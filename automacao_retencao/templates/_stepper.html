@@ -1,0 +1,11 @@
+{% macro stepper(active) %}
+{% set steps = [(1, 'Enviar arquivos'), (2, 'Pré-visualização'), (3, 'Mapeamento'), (4, 'Resultado')] %}
+<div class="stepper">
+  {% for n, label in steps %}
+  <div class="step {% if n == active %}active{% elif n < active %}done{% endif %}">
+    <span class="n">{% if n < active %}<i class="bi bi-check-lg"></i>{% else %}{{ n }}{% endif %}</span>
+    <span>{{ label }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endmacro %}

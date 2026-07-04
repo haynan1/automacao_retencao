@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Erro · Retenções FMS{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="panel-pad panel text-center">
+      <div class="upload-icon mx-auto mb-3" style="background: rgba(248,113,113,0.14); color: var(--danger); width:64px; height:64px; font-size:1.8rem;">
+        <i class="bi bi-exclamation-octagon"></i>
+      </div>
+      <h1 class="hero mb-2" style="font-size: 1.7rem;">{{ titulo or 'Algo deu errado' }}</h1>
+      <p class="lead-muted mx-auto">{{ mensagem or 'Ocorreu um erro inesperado.' }}</p>
+      <div class="d-flex gap-2 justify-content-center mt-4">
+        <a href="{{ url_for('index') }}" class="btn btn-primary"><i class="bi bi-arrow-left me-2"></i>Recomeçar</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

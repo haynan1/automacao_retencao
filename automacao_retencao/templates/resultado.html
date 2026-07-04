@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% from "_stepper.html" import stepper %}
+{% block title %}Resultado · Retenções FMS{% endblock %}
+{% block steps %}{{ stepper(4) }}{% endblock %}
+
+{% block content %}
+<div class="alert-soft-success p-4 mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
+  <div>
+    <div class="fw-semibold fs-5"><i class="bi bi-check-circle-fill me-2"></i>Planilha preenchida com sucesso</div>
+    <div class="small mt-1">Competência {{ competencia or '—' }} · aba <strong>{{ resumo.aba_destino }}</strong> · {{ resumo.qtd_celulas }} células lançadas.</div>
+  </div>
+  <a href="{{ url_for('download', sid=sid) }}" class="btn btn-primary btn-lg">
+    <i class="bi bi-download me-2"></i>Baixar {{ output_nome }}
+  </a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <div class="stat"><div class="k">Total lido (bruto)</div><div class="v small mono">{{ resumo.total_lido|moeda }}</div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat"><div class="k">Total preenchido</div><div class="v small mono" style="color: var(--success)">{{ resumo.total_preenchido|moeda }}</div></div>
+  </div>
+  <div class="col-md-4">
+    <div class="stat"><div class="k">Total pendente</div><div class="v small mono" style="color: {{ 'var(--danger)' if resumo.total_pendente > 0 else 'var(--muted)' }}">{{ resumo.total_pendente|moeda }}</div></div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="section-title mb-2">Total por setor</div>
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Setor</th><th class="text-end">Valor</th></tr></thead>
+          <tbody>
+            {% for setor, valor in resumo.por_setor.items() %}
+            <tr><td>{{ setor }}</td><td class="text-end mono value-pos">{{ valor|moeda }}</td></tr>
+            {% else %}<tr><td colspan="2" class="text-secondary">Nada preenchido.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section-title mt-4 mb-2">Total por tipo</div>
+    <div class="panel">
+      <div class="d-flex flex-wrap gap-3">
+        {% for tipo, valor in resumo.por_tipo.items() %}
+        <div class="stat flex-grow-1">
+          <div class="k">{{ tipo }}</div><div class="v small mono">{{ valor|moeda }}</div>
+        </div>
+        {% else %}<span class="text-secondary">—</span>{% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="section-title mb-2">Total por rubrica</div>
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table">
+          <thead><tr><th>Rubrica</th><th class="text-end">Valor</th></tr></thead>
+          <tbody>
+            {% for rub, valor in resumo.por_rubrica.items() %}
+            <tr><td>{{ rub }}</td><td class="text-end mono value-pos">{{ valor|moeda }}</td></tr>
+            {% else %}<tr><td colspan="2" class="text-secondary">Nada preenchido.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% set tem_pend = resumo.lotacoes_nao_mapeadas or resumo.rubricas_nao_mapeadas or resumo.folhas_desconhecidas or resumo.pendencias_estrutura %}
+{% if tem_pend %}
+<div class="section-title mt-5 mb-2 text-danger">Pendências — não preenchidas</div>
+<div class="alert-soft-warn p-3 mb-3 small">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  Confira estes itens antes de enviar o arquivo final. Eles não foram lançados na planilha.
+</div>
+<div class="row g-4">
+  {% if resumo.lotacoes_nao_mapeadas %}
+  <div class="col-lg-4">
+    <div class="panel h-100">
+      <div class="fw-semibold mb-2">Lotações não mapeadas</div>
+      {% for nome, qtd in resumo.lotacoes_nao_mapeadas.items() %}
+      <div class="d-flex justify-content-between small mb-1"><span class="text-truncate me-2">{{ nome }}</span><span class="chip danger">{{ qtd }}×</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if resumo.rubricas_nao_mapeadas %}
+  <div class="col-lg-4">
+    <div class="panel h-100">
+      <div class="fw-semibold mb-2">Rubricas não mapeadas</div>
+      {% for nome, qtd in resumo.rubricas_nao_mapeadas.items() %}
+      <div class="d-flex justify-content-between small mb-1"><span class="text-truncate me-2">{{ nome }}</span><span class="chip danger">{{ qtd }}×</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if resumo.folhas_desconhecidas %}
+  <div class="col-lg-4">
+    <div class="panel h-100">
+      <div class="fw-semibold mb-2">Tipos de folha desconhecidos</div>
+      {% for nome, qtd in resumo.folhas_desconhecidas.items() %}
+      <div class="d-flex justify-content-between small mb-1"><span class="text-truncate me-2">{{ nome }}</span><span class="chip danger">{{ qtd }}×</span></div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  {% if resumo.pendencias_estrutura %}
+  <div class="col-12">
+    <div class="panel">
+      <div class="fw-semibold mb-2">Itens sem lugar na planilha</div>
+      <div class="table-responsive">
+        <table class="table table-sm">
+          <thead><tr><th>Motivo</th><th>Setor</th><th>Tipo</th><th>Rubrica</th><th class="text-end">Valor</th></tr></thead>
+          <tbody>
+            {% for item in resumo.pendencias_estrutura %}
+            <tr><td class="small">{{ item.motivo }}</td><td>{{ item.setor }}</td><td>{{ item.tipo }}</td><td>{{ item.rubrica }}</td><td class="text-end mono">{{ item.valor|moeda }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<div class="alert-soft-success p-3 mt-4 small">
+  <i class="bi bi-check-circle me-2"></i>Sem pendências: todos os lançamentos reconhecidos foram preenchidos.
+</div>
+{% endif %}
+
+<div class="d-flex gap-2 mt-5">
+  <a href="{{ url_for('download', sid=sid) }}" class="btn btn-primary btn-lg"><i class="bi bi-download me-2"></i>Baixar planilha</a>
+  <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-arrow-repeat me-2"></i>Novo processamento</a>
+</div>
+<p class="text-secondary small mt-3"><i class="bi bi-info-circle me-1"></i>Abra o arquivo no Excel para que as fórmulas e o dashboard recalculem automaticamente.</p>
+{% endblock %}

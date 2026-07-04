@@ -1,0 +1,36 @@
+# ==== Python ====
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# ==== Ambientes virtuais ====
+venv/
+.venv/
+env/
+ENV/
+
+# ==== Segredos / configuração local ====
+.env
+.env.*
+!.env.example
+
+# ==== Dados de trabalho do app (nunca versionar arquivos do usuário) ====
+automacao_retencao/uploads/*
+automacao_retencao/outputs/*
+automacao_retencao/logs/*
+!automacao_retencao/uploads/.gitkeep
+!automacao_retencao/outputs/.gitkeep
+!automacao_retencao/logs/.gitkeep
+
+# ==== IDE / editores ====
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ==== Sistema operacional ====
+.DS_Store
+Thumbs.db
+desktop.ini

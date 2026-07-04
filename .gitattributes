@@ -1,0 +1,13 @@
+# Normaliza fim de linha: repositório sempre em LF, checkout conforme o SO.
+* text=auto eol=lf
+
+# Scripts que devem manter CRLF no Windows.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Arquivos binários — nunca aplicar conversão de fim de linha.
+*.xlsx binary
+*.png binary
+*.jpg binary
+*.ico binary

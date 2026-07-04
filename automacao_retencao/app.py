@@ -1,0 +1,453 @@
+"""Automação de Retenções FMS — camada web (Flask).
+
+Orquestra o fluxo: upload -> análise -> pré-visualização -> mapeamento ->
+processamento -> resultado. Toda a regra de negócio vive em services/.
+"""
+
+from __future__ import annotations
+
+import os
+import traceback
+from decimal import Decimal
+from pathlib import Path
+
+# Carrega variáveis de um arquivo .env, se existir (opcional).
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
+from flask import (
+    Flask,
+    abort,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    url_for,
+)
+from openpyxl import load_workbook
+from werkzeug.utils import secure_filename
+
+from services import conferencia, mapeador, preenchimento
+from services.parser_listagem import extrair_lancamentos
+from services.utils import (
+    OUTPUTS_DIR,
+    UPLOADS_DIR,
+    carregar_sessao,
+    configurar_logs,
+    criar_pastas,
+    gerar_nome_saida,
+    novo_id_sessao,
+    salvar_sessao,
+)
+
+MAX_UPLOAD_MB = 30
+EXTENSOES_OK = {".xlsx"}
+
+app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_MB * 1024 * 1024
+app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24).hex())
+
+criar_pastas()
+log = configurar_logs()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _extensao_valida(nome: str) -> bool:
+    return os.path.splitext(nome.lower())[1] in EXTENSOES_OK
+
+
+def _salvar_upload(file_storage, prefixo: str) -> tuple[str, str]:
+    """Salva o upload dentro de uploads/ com nome seguro e único.
+
+    Retorna (nome_original, caminho_absoluto). Levanta ValueError se a
+    extensão for inválida.
+    """
+    nome_original = file_storage.filename or ""
+    if not _extensao_valida(nome_original):
+        raise ValueError(f"Arquivo '{nome_original}' não é .xlsx.")
+
+    base = secure_filename(nome_original) or "arquivo.xlsx"
+    destino = UPLOADS_DIR / f"{prefixo}_{base}"
+    # Garante que o destino permaneça dentro de uploads/ (defesa em profundidade).
+    destino = destino.resolve()
+    if UPLOADS_DIR.resolve() not in destino.parents:
+        raise ValueError("Caminho de upload inválido.")
+    file_storage.save(destino)
+    return nome_original, str(destino)
+
+
+def _sessao_ou_404(sid: str) -> dict:
+    dados = carregar_sessao(sid)
+    if not dados:
+        abort(404)
+    return dados
+
+
+def _detectar_setores_modelo(caminho_modelo: str, aba_preferida: str | None):
+    """Abre o modelo e detecta setores e abas disponíveis.
+
+    Retorna (setores: list[str], abas: list[str], aba_analisada: str|None).
+    """
+    wb = load_workbook(caminho_modelo, data_only=False)
+    try:
+        abas = list(wb.sheetnames)
+        alvo = aba_preferida if aba_preferida in abas else None
+        if alvo is None:
+            # Primeira aba que não seja a de conferência.
+            for nome in abas:
+                if "CONFER" not in nome.upper():
+                    alvo = nome
+                    break
+        ws = wb[alvo] if alvo else wb.worksheets[0]
+        blocos = preenchimento.localizar_blocos_setores(ws)
+        setores = [b["setor"] for b in blocos]
+        return setores, abas, alvo
+    finally:
+        wb.close()
+
+
+# ---------------------------------------------------------------------------
+# Rotas
+# ---------------------------------------------------------------------------
+
+@app.route("/")
+def index():
+    return render_template("index.html", max_mb=MAX_UPLOAD_MB)
+
+
+@app.route("/analisar", methods=["POST"])
+def analisar():
+    try:
+        f_origem = request.files.get("listagem")
+        f_modelo = request.files.get("modelo")
+        if not f_origem or not f_origem.filename or not f_modelo or not f_modelo.filename:
+            return render_template(
+                "erro.html",
+                titulo="Arquivos faltando",
+                mensagem="Envie os dois arquivos: Listagem de Eventos e Planilha Modelo.",
+            ), 400
+
+        sid = novo_id_sessao()
+        nome_origem, path_origem = _salvar_upload(f_origem, f"{sid}_origem")
+        nome_modelo, path_modelo = _salvar_upload(f_modelo, f"{sid}_modelo")
+
+        # --- Parsing do relatório de origem ---
+        regras_rubricas = mapeador.carregar_regras_rubricas()
+        resultado = extrair_lancamentos(path_origem)
+        lancamentos = resultado["lancamentos"]
+
+        if resultado["cabecalho"] is None:
+            return render_template(
+                "erro.html",
+                titulo="Estrutura não reconhecida",
+                mensagem=(
+                    "Não foi possível localizar os cabeçalhos de lançamento "
+                    "(Descrição/Valor) no arquivo de origem. Confirme que é a "
+                    "Listagem de Eventos exportada em XLSX."
+                ),
+            ), 422
+
+        if not lancamentos:
+            return render_template(
+                "erro.html",
+                titulo="Nenhum lançamento encontrado",
+                mensagem="O relatório foi lido, mas não há linhas de lançamento válidas.",
+            ), 422
+
+        if not resultado["lotacoes"]:
+            return render_template(
+                "erro.html",
+                titulo="Nenhuma lotação detectada",
+                mensagem="Não foram encontradas lotações no formato '5.0000.0000 - FMS, ...'.",
+            ), 422
+
+        # --- Detecta setores/abas do modelo ---
+        aba_sugerida = None
+        wb_tmp = load_workbook(path_modelo, data_only=False, read_only=True)
+        try:
+            aba_sugerida = preenchimento.localizar_aba_destino(wb_tmp, resultado["competencia"])
+        finally:
+            wb_tmp.close()
+
+        setores_planilha, abas_modelo, _ = _detectar_setores_modelo(path_modelo, aba_sugerida)
+        if not setores_planilha:
+            return render_template(
+                "erro.html",
+                titulo="Modelo sem blocos de setor",
+                mensagem=(
+                    "A planilha modelo não apresentou blocos de setor no formato "
+                    "esperado (nome do setor seguido de uma linha 'Tipo | rubricas...')."
+                ),
+            ), 422
+
+        # --- Mapeamentos ---
+        mapa_lotacoes = mapeador.carregar_mapeamento_lotacoes()
+        mapeador.aplicar_mapeamentos(lancamentos, mapa_lotacoes, regras_rubricas)
+        pendencias = mapeador.detectar_pendencias(lancamentos)
+
+        # --- Estrutura para as telas ---
+        lotacoes_info = []
+        for lot in resultado["lotacoes"]:
+            setor = mapeador.mapear_lotacao(lot, mapa_lotacoes)
+            sugestao = setor or mapeador.sugerir_setor(lot, setores_planilha)
+            lotacoes_info.append(
+                {"lotacao": lot, "setor_atual": setor, "sugestao": sugestao, "mapeada": bool(setor)}
+            )
+
+        rubricas_identificadas = sorted(
+            {reg["rubrica_destino"] for reg in lancamentos if reg["rubrica_destino"]}
+        )
+
+        dados = {
+            "id": sid,
+            "competencia": resultado["competencia"],
+            "aba_origem": resultado["aba"],
+            "arquivo_origem_nome": nome_origem,
+            "arquivo_origem_path": path_origem,
+            "arquivo_modelo_nome": nome_modelo,
+            "arquivo_modelo_path": path_modelo,
+            "lancamentos": lancamentos,
+            "lotacoes": resultado["lotacoes"],
+            "lotacoes_info": lotacoes_info,
+            "setores_planilha": setores_planilha,
+            "abas_modelo": abas_modelo,
+            "aba_sugerida": aba_sugerida,
+            "rubricas_identificadas": rubricas_identificadas,
+            "pendencias": pendencias,
+        }
+        salvar_sessao(sid, dados)
+        log.info("Análise concluída sid=%s lançamentos=%d lotações=%d",
+                 sid, len(lancamentos), len(resultado["lotacoes"]))
+        return redirect(url_for("preview", sid=sid))
+
+    except ValueError as exc:
+        log.warning("Validação falhou: %s", exc)
+        return render_template("erro.html", titulo="Arquivo inválido", mensagem=str(exc)), 400
+    except Exception as exc:  # noqa: BLE001 — nunca deixar a app cair
+        log.error("Falha na análise: %s\n%s", exc, traceback.format_exc())
+        return render_template(
+            "erro.html",
+            titulo="Erro ao analisar os arquivos",
+            mensagem="Ocorreu um erro inesperado. Detalhes técnicos foram registrados em logs/app.log.",
+        ), 500
+
+
+@app.route("/preview/<sid>")
+def preview(sid):
+    dados = _sessao_ou_404(sid)
+    p = dados["pendencias"]
+    return render_template(
+        "preview.html",
+        sid=sid,
+        competencia=dados["competencia"],
+        qtd_lancamentos=len(dados["lancamentos"]),
+        qtd_lotacoes=len(dados["lotacoes"]),
+        rubricas=dados["rubricas_identificadas"],
+        lotacoes_info=dados["lotacoes_info"],
+        lotacoes_nao_mapeadas=p["lotacoes_nao_mapeadas"],
+        rubricas_nao_mapeadas=p["rubricas_nao_mapeadas"],
+        folhas_desconhecidas=p["folhas_desconhecidas"],
+    )
+
+
+@app.route("/mapeamento/<sid>")
+def mapeamento(sid):
+    dados = _sessao_ou_404(sid)
+    return render_template(
+        "mapeamento.html",
+        sid=sid,
+        lotacoes_info=dados["lotacoes_info"],
+        setores=dados["setores_planilha"],
+        abas=dados["abas_modelo"],
+        aba_sugerida=dados["aba_sugerida"],
+        competencia=dados["competencia"],
+    )
+
+
+@app.route("/processar/<sid>", methods=["POST"])
+def processar(sid):
+    dados = _sessao_ou_404(sid)
+    try:
+        lancamentos = dados["lancamentos"]
+        lotacoes = dados["lotacoes"]
+
+        # --- Mapeamento vindo do formulário (por índice, robusto a acentos) ---
+        overrides: dict[str, str] = {}
+        for i, lot in enumerate(lotacoes):
+            valor = (request.form.get(f"setor_{i}") or "").strip()
+            if valor:
+                overrides[lot] = valor
+
+        for reg in lancamentos:
+            if reg["lotacao_original"] in overrides:
+                reg["setor_destino"] = overrides[reg["lotacao_original"]]
+
+        # Persistir mapeamento de lotações, se solicitado.
+        if request.form.get("salvar_mapeamento") == "on":
+            mapa = mapeador.carregar_mapeamento_lotacoes()
+            mapa.update(overrides)
+            mapeador.salvar_mapeamento_lotacoes(mapa)
+            log.info("Mapeamento de lotações atualizado (%d entradas).", len(overrides))
+
+        # --- Aba de destino ---
+        aba_destino = (request.form.get("aba_destino") or "").strip()
+        if aba_destino not in dados["abas_modelo"]:
+            return render_template(
+                "erro.html",
+                titulo="Aba inválida",
+                mensagem="Selecione uma aba de destino existente na planilha modelo.",
+            ), 400
+
+        # --- Agregação ---
+        agregados, ignorados = conferencia.agregar_lancamentos(lancamentos)
+
+        # --- Preenchimento no modelo ---
+        wb = load_workbook(dados["arquivo_modelo_path"], data_only=False)
+        ws = wb[aba_destino]
+        blocos = preenchimento.localizar_blocos_setores(ws)
+        preenchimento.limpar_area_lancamento(ws, blocos)
+        relatorio = preenchimento.preencher_valores(ws, agregados, blocos)
+
+        # --- Totais e conferência ---
+        total_lido = conferencia.calcular_totais_lidos(lancamentos)
+        agregados_tot = conferencia.calcular_totais_agregados(agregados)
+        pend = conferencia.calcular_pendencias(ignorados, relatorio["pendencias_estrutura"])
+        pendencias_map = mapeador.detectar_pendencias(lancamentos)
+
+        dados_conf = {
+            "competencia": dados["competencia"],
+            "arquivo_origem": dados["arquivo_origem_nome"],
+            "arquivo_modelo": dados["arquivo_modelo_nome"],
+            "aba_destino": aba_destino,
+            "total_lido": total_lido,
+            "total_preenchido": relatorio["total_preenchido"],
+            "total_pendente": pend["total_pendente"],
+            "por_setor": agregados_tot["por_setor"],
+            "por_rubrica": agregados_tot["por_rubrica"],
+            "por_tipo": agregados_tot["por_tipo"],
+            "lotacoes_nao_mapeadas": pendencias_map["lotacoes_nao_mapeadas"],
+            "rubricas_nao_mapeadas": pendencias_map["rubricas_nao_mapeadas"],
+            "folhas_desconhecidas": pendencias_map["folhas_desconhecidas"],
+            "pendencias_estrutura": relatorio["pendencias_estrutura"],
+        }
+        conferencia.criar_aba_conferencia(wb, dados_conf)
+        preenchimento.preservar_formulas(wb)
+
+        # --- Salvar saída ---
+        nome_saida = gerar_nome_saida()
+        caminho_saida = (OUTPUTS_DIR / nome_saida).resolve()
+        if OUTPUTS_DIR.resolve() not in caminho_saida.parents:
+            raise ValueError("Caminho de saída inválido.")
+        wb.save(caminho_saida)
+        wb.close()
+
+        # --- Persistir resumo para a tela final ---
+        dados["output_nome"] = nome_saida
+        dados["output_path"] = str(caminho_saida)
+        dados["resumo"] = {
+            "aba_destino": aba_destino,
+            "total_lido": total_lido,
+            "total_preenchido": relatorio["total_preenchido"],
+            "total_pendente": pend["total_pendente"],
+            "por_setor": agregados_tot["por_setor"],
+            "por_rubrica": agregados_tot["por_rubrica"],
+            "por_tipo": agregados_tot["por_tipo"],
+            "qtd_celulas": len(relatorio["preenchidos"]),
+            "pendencias_estrutura": relatorio["pendencias_estrutura"],
+            "lotacoes_nao_mapeadas": pendencias_map["lotacoes_nao_mapeadas"],
+            "rubricas_nao_mapeadas": pendencias_map["rubricas_nao_mapeadas"],
+            "folhas_desconhecidas": pendencias_map["folhas_desconhecidas"],
+        }
+        salvar_sessao(sid, dados)
+        log.info("Processamento concluído sid=%s células=%d saída=%s",
+                 sid, len(relatorio["preenchidos"]), nome_saida)
+        return redirect(url_for("resultado", sid=sid))
+
+    except KeyError as exc:
+        log.error("Aba/estrutura ausente: %s", exc)
+        return render_template(
+            "erro.html", titulo="Aba não encontrada",
+            mensagem=f"Não foi possível abrir a aba selecionada: {exc}.",
+        ), 422
+    except Exception as exc:  # noqa: BLE001
+        log.error("Falha no processamento: %s\n%s", exc, traceback.format_exc())
+        return render_template(
+            "erro.html",
+            titulo="Erro ao preencher a planilha",
+            mensagem="Ocorreu um erro inesperado. Detalhes foram registrados em logs/app.log.",
+        ), 500
+
+
+@app.route("/resultado/<sid>")
+def resultado(sid):
+    dados = _sessao_ou_404(sid)
+    if "resumo" not in dados:
+        return redirect(url_for("mapeamento", sid=sid))
+    return render_template(
+        "resultado.html",
+        sid=sid,
+        competencia=dados["competencia"],
+        output_nome=dados["output_nome"],
+        resumo=dados["resumo"],
+    )
+
+
+@app.route("/download/<sid>")
+def download(sid):
+    dados = _sessao_ou_404(sid)
+    caminho = dados.get("output_path")
+    if not caminho or not os.path.exists(caminho):
+        abort(404)
+    # Garante que o arquivo servido está dentro de outputs/ (anti path traversal).
+    resolvido = Path(caminho).resolve()
+    if OUTPUTS_DIR.resolve() not in resolvido.parents:
+        abort(403)
+    return send_file(resolvido, as_attachment=True, download_name=dados["output_nome"])
+
+
+@app.errorhandler(413)
+def arquivo_grande(_):
+    return render_template(
+        "erro.html",
+        titulo="Arquivo muito grande",
+        mensagem=f"O limite de upload é {MAX_UPLOAD_MB} MB por arquivo.",
+    ), 413
+
+
+@app.errorhandler(404)
+def nao_encontrado(_):
+    return render_template(
+        "erro.html", titulo="Não encontrado",
+        mensagem="A página ou sessão de trabalho não foi encontrada. Recomece o envio.",
+    ), 404
+
+
+@app.template_filter("moeda")
+def _moeda(valor) -> str:
+    """Formata Decimal/float como moeda brasileira (R$ 1.234,56)."""
+    try:
+        d = Decimal(str(valor))
+    except Exception:
+        return "R$ 0,00"
+    inteiro, _, dec = f"{d:.2f}".partition(".")
+    negativo = inteiro.startswith("-")
+    inteiro = inteiro.lstrip("-")
+    grupos = []
+    while len(inteiro) > 3:
+        grupos.insert(0, inteiro[-3:])
+        inteiro = inteiro[:-3]
+    grupos.insert(0, inteiro)
+    formatado = ".".join(grupos)
+    sinal = "-" if negativo else ""
+    return f"R$ {sinal}{formatado},{dec}"
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=True)

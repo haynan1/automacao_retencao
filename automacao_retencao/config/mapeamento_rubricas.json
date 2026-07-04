@@ -1,0 +1,24 @@
+{
+  "_comentario": "Regras avaliadas EM ORDEM. A primeira regra cujo 'contem' bater com a descricao (normalizada, sem acento, caixa alta) define a rubrica. Regras mais especificas devem vir ANTES das genericas (ex.: IPASGO DEPENDENTES antes de IPASGO).",
+  "regras": [
+    { "rubrica": "ARSEM",                  "contem": ["ARSEM"] },
+    { "rubrica": "IPASGO DEPENDENTES",     "contem": ["IPASGO DEPENDENTES", "IPASGO DEPEND"] },
+    { "rubrica": "IPASGO",                 "contem": ["IPASGO"] },
+    { "rubrica": "IR",                     "contem": ["IRRF", "IMPOSTO DE RENDA", "I.R.R.F"] },
+    { "rubrica": "SINDSAÚDE",              "contem": ["SINDSAUDE"] },
+    { "rubrica": "SINDACSE",               "contem": ["SINDACSE"] },
+    { "rubrica": "CEF",                    "contem": ["EMPRESTIMO CEF", "CAIXA ECONOMICA", "CEF"] },
+    { "rubrica": "ITAÚ",                   "contem": ["EMPRESTIMO ITAU", "ITAU"] },
+    { "rubrica": "BRADESCO",               "contem": ["BRADESCO"] },
+    { "rubrica": "BB",                     "contem": ["BANCO DO BRASIL", "BANCO BRASIL", "BB"] },
+    { "rubrica": "PREVIBELOS",             "contem": ["PREVIBELOS"] },
+    { "rubrica": "FUNPRECOR",              "contem": ["FUNPRECOR"] },
+    { "rubrica": "BRASIL PREV",            "contem": ["BRASILPREV", "BRASIL PREV"] },
+    { "rubrica": "PARAÚNA PREV",           "contem": ["PARAUNA PREV", "PARAUNAPREV"] },
+    { "rubrica": "AURIPREVI",              "contem": ["AURI-PREVI", "AURIPREVI"] },
+    { "rubrica": "DETERMINAÇÃO JUDICIAL",  "contem": ["DETERMINACAO JUDICIAL", "DET JUDICIAL"] },
+    { "rubrica": "IPARV",                  "contem": ["IPARV"] },
+    { "rubrica": "PREVFAINA",              "contem": ["PREVFAINA"] },
+    { "rubrica": "IPASI",                  "contem": ["IPASI"] }
+  ]
+}

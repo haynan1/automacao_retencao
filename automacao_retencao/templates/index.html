@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "_stepper.html" import stepper %}
+{% block title %}Automação de Retenções FMS{% endblock %}
+
+{% block steps %}{{ stepper(1) }}{% endblock %}
+
+{% block content %}
+<div class="row g-5 align-items-start">
+  <div class="col-lg-5">
+    <p class="display-eyebrow mb-2">Fundo Municipal de Saúde</p>
+    <h1 class="hero mb-3">Retenções preenchidas<br>sem erro manual.</h1>
+    <p class="lead-muted">
+      Envie a <strong>Listagem de Eventos</strong> e a planilha modelo de
+      <strong>Retenção</strong>. O sistema preenche automaticamente por lotação,
+      rubrica e tipo de folha — preservando fórmulas, estilos e dashboard — e
+      mostra exatamente o que identificou, o que preencheu e o que ficou pendente.
+    </p>
+    <ul class="list-unstyled mt-4 d-grid gap-2 text-secondary">
+      <li><i class="bi bi-shield-check text-success me-2"></i>Fórmulas e layout do modelo permanecem intactos.</li>
+      <li><i class="bi bi-diagram-3 text-success me-2"></i>Agregação por setor · tipo · rubrica.</li>
+      <li><i class="bi bi-clipboard-data text-success me-2"></i>Aba de conferência gerada automaticamente.</li>
+    </ul>
+  </div>
+
+  <div class="col-lg-7">
+    <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data" id="form-analisar">
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="panel upload-card h-100 d-flex flex-column gap-3" id="card-listagem">
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="upload-icon"><i class="bi bi-filetype-xlsx"></i></span>
+              <span class="chip">1º arquivo</span>
+            </div>
+            <div>
+              <div class="fw-semibold">Listagem de Eventos</div>
+              <div class="text-secondary small">Relatório exportado do sistema (.xlsx)</div>
+            </div>
+            <div class="small text-info mt-auto" data-empty="Clique para selecionar" id="nome-listagem">Clique para selecionar</div>
+            <input type="file" name="listagem" accept=".xlsx" required id="input-listagem">
+          </label>
+        </div>
+
+        <div class="col-md-6">
+          <label class="panel upload-card h-100 d-flex flex-column gap-3" id="card-modelo">
+            <div class="d-flex align-items-center justify-content-between">
+              <span class="upload-icon"><i class="bi bi-table"></i></span>
+              <span class="chip">2º arquivo</span>
+            </div>
+            <div>
+              <div class="fw-semibold">Planilha Modelo — Retenção</div>
+              <div class="text-secondary small">Planilha com setores e fórmulas (.xlsx)</div>
+            </div>
+            <div class="small text-info mt-auto" data-empty="Clique para selecionar" id="nome-modelo">Clique para selecionar</div>
+            <input type="file" name="modelo" accept=".xlsx" required id="input-modelo">
+          </label>
+        </div>
+      </div>
+
+      <div class="d-flex align-items-center justify-content-between mt-4 flex-wrap gap-3">
+        <span class="text-secondary small"><i class="bi bi-info-circle me-1"></i>Máximo {{ max_mb }} MB por arquivo · apenas .xlsx</span>
+        <button type="submit" class="btn btn-primary btn-lg" id="btn-analisar">
+          <span class="label"><i class="bi bi-search me-2"></i>Analisar arquivos</span>
+          <span class="loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Analisando…</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function bind(inputId, nameId, cardId) {
+    const input = document.getElementById(inputId);
+    const name = document.getElementById(nameId);
+    const card = document.getElementById(cardId);
+    input.addEventListener('change', () => {
+      if (input.files.length) {
+        name.textContent = input.files[0].name;
+        name.classList.remove('text-info'); name.classList.add('text-success');
+        card.classList.add('filled');
+      } else {
+        name.textContent = name.dataset.empty;
+        card.classList.remove('filled');
+      }
+    });
+  }
+  bind('input-listagem', 'nome-listagem', 'card-listagem');
+  bind('input-modelo', 'nome-modelo', 'card-modelo');
+
+  document.getElementById('form-analisar').addEventListener('submit', (e) => {
+    const btn = document.getElementById('btn-analisar');
+    btn.disabled = true;
+    btn.querySelector('.label').classList.add('d-none');
+    btn.querySelector('.loading').classList.remove('d-none');
+  });
+</script>
+{% endblock %}
