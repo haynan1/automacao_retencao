@@ -17,6 +17,34 @@
   --shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.8);
 }
 
+/* Modo claro (branco): override das variáveis quando data-bs-theme=light */
+html[data-bs-theme="light"] {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #f2f4f7;
+  --border: #e2e6ec;
+  --border-soft: #eef1f5;
+  --text: #0f172a;
+  --muted: #5b6675;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.10);
+  --success: #059669;
+  --warn: #b45309;
+  --danger: #dc2626;
+  --shadow: 0 20px 50px -32px rgba(15, 23, 42, 0.28);
+}
+html[data-bs-theme="light"] .navbar { background: rgba(255, 255, 255, 0.82); }
+html[data-bs-theme="light"] .ambient {
+  background:
+    radial-gradient(60% 50% at 15% -5%, rgba(37, 99, 235, 0.08), transparent 60%),
+    radial-gradient(50% 40% at 100% 0%, rgba(5, 150, 105, 0.06), transparent 55%);
+}
+/* No claro, os botões "outline-light" ficariam invisíveis: torna-os escuros. */
+html[data-bs-theme="light"] .btn-outline-light {
+  --bs-btn-color: #334155; --bs-btn-border-color: #cbd5e1;
+  --bs-btn-hover-bg: #f1f5f9; --bs-btn-hover-color: #0f172a; --bs-btn-hover-border-color: #94a3b8;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
@@ -94,6 +122,22 @@ h1.hero { font-weight: 700; font-size: clamp(1.9rem, 4vw, 2.9rem); line-height: 
 .upload-card.filled .upload-icon { background: rgba(52, 211, 153, 0.14); color: var(--success); }
 
 input[type="file"] { display: none; }
+
+/* Escolha de molde: fixo vs upload */
+.opt-modelo {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.opt-modelo:hover { border-color: var(--accent); }
+.opt-modelo:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.upload-inline {
+  border: 1px dashed var(--border);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.upload-inline:hover { border-color: var(--accent); }
 
 /* Stat tiles */
 .stat {

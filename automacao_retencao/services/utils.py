@@ -24,14 +24,17 @@ UPLOADS_DIR = BASE_DIR / "uploads"
 OUTPUTS_DIR = BASE_DIR / "outputs"
 LOGS_DIR = BASE_DIR / "logs"
 CONFIG_DIR = BASE_DIR / "config"
+MODELOS_DIR = BASE_DIR / "modelos"      # molde(s) versionavel(is) no repositorio
 SESSIONS_DIR = OUTPUTS_DIR / "_sessions"
+
+# O molde fixo e os vinculos aprendidos vivem por perfil (services/perfis.py).
 
 _logger: logging.Logger | None = None
 
 
 def criar_pastas() -> None:
     """Garante que todas as pastas de trabalho existam."""
-    for pasta in (UPLOADS_DIR, OUTPUTS_DIR, LOGS_DIR, CONFIG_DIR, SESSIONS_DIR):
+    for pasta in (UPLOADS_DIR, OUTPUTS_DIR, LOGS_DIR, CONFIG_DIR, MODELOS_DIR, SESSIONS_DIR):
         pasta.mkdir(parents=True, exist_ok=True)
 
 

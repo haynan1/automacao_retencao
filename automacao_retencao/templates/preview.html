@@ -4,9 +4,12 @@
 {% block steps %}{{ stepper(2) }}{% endblock %}
 
 {% block content %}
+{% if aviso_perfil %}
+<div class="alert-soft-warn p-3 mb-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>{{ aviso_perfil }}</div>
+{% endif %}
 <div class="d-flex align-items-end justify-content-between flex-wrap gap-3 mb-4">
   <div>
-    <p class="display-eyebrow mb-1">Pré-visualização</p>
+    <p class="display-eyebrow mb-1">Pré-visualização{% if perfil_nome %} · {{ perfil_nome }}{% endif %}</p>
     <h1 class="hero" style="font-size: clamp(1.6rem, 3vw, 2.2rem);">O que o sistema identificou</h1>
   </div>
   <a href="{{ url_for('mapeamento', sid=sid) }}" class="btn btn-primary btn-lg">

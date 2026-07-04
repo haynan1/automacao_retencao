@@ -1,0 +1,10 @@
+{
+  "padrao": "saude",
+  "perfis": [
+    {
+      "slug": "saude",
+      "nome": "Secretaria da Saúde (FMS)",
+      "deteccao": ["FUNDO MUNICIPAL DE SAUDE", "FMS"]
+    }
+  ]
+}

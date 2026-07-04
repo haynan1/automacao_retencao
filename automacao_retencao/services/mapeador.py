@@ -14,40 +14,40 @@ import json
 import re
 from decimal import Decimal
 
+from . import perfis
 from .normalizador import normalizar_rubrica, normalizar_texto
 from .utils import CONFIG_DIR
 
 # Prefixo de parcela em emprestimos: "12/120 - EMPRESTIMO CEF 1" -> "EMPRESTIMO CEF 1".
 _RE_PARCELA = re.compile(r"^\s*\d+\s*/\s*\d+\s*-\s*")
 
-_ARQ_LOTACOES = CONFIG_DIR / "mapeamento_lotacoes.json"
+# Regras de rubrica: genericas, compartilhadas entre secretarias.
 _ARQ_RUBRICAS = CONFIG_DIR / "mapeamento_rubricas.json"
-_ARQ_VINCULO = CONFIG_DIR / "vinculo_rubrica_coluna.json"
 
 IGNORAR = "__IGNORAR__"  # marcador de vinculo "fora de escopo / nao preencher"
 _ZERO = Decimal("0.00")
 
 
 # ===========================================================================
-# Eixo A — Lotacoes -> Setor
+# Eixo A — Lotacoes -> Setor (por perfil)
 # ===========================================================================
 
-def carregar_mapeamento_lotacoes() -> dict:
-    if not _ARQ_LOTACOES.exists():
+def carregar_mapeamento_lotacoes(perfil: str) -> dict:
+    arq = perfis.caminho_mapa_lotacoes(perfil)
+    if not arq.exists():
         return {}
-    with _ARQ_LOTACOES.open("r", encoding="utf-8") as fh:
+    with arq.open("r", encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def salvar_mapeamento_lotacoes(mapa: dict) -> None:
-    _ARQ_LOTACOES.parent.mkdir(parents=True, exist_ok=True)
+def salvar_mapeamento_lotacoes(perfil: str, mapa: dict) -> None:
+    arq = perfis.caminho_mapa_lotacoes(perfil)
     limpo = {k: v for k, v in mapa.items() if k and v}
-    with _ARQ_LOTACOES.open("w", encoding="utf-8") as fh:
+    with arq.open("w", encoding="utf-8") as fh:
         json.dump(dict(sorted(limpo.items())), fh, ensure_ascii=False, indent=2)
 
 
-def mapear_lotacao(lotacao_original: str, mapa: dict | None = None) -> str | None:
-    mapa = mapa if mapa is not None else carregar_mapeamento_lotacoes()
+def mapear_lotacao(lotacao_original: str, mapa: dict) -> str | None:
     if lotacao_original in mapa:
         return mapa[lotacao_original]
     alvo = normalizar_texto(lotacao_original)
@@ -92,18 +92,19 @@ def mapear_rubrica(descricao_original: str, regras: list[dict] | None = None) ->
     return normalizar_rubrica(descricao_original, regras)
 
 
-def carregar_vinculos() -> dict:
-    """Vinculos aprendidos: rubrica/descricao (normalizada) -> coluna | IGNORAR."""
-    if not _ARQ_VINCULO.exists():
+def carregar_vinculos(perfil: str) -> dict:
+    """Vinculos aprendidos do perfil: rubrica/descricao (norm) -> coluna | IGNORAR."""
+    arq = perfis.caminho_vinculos(perfil)
+    if not arq.exists():
         return {}
-    with _ARQ_VINCULO.open("r", encoding="utf-8") as fh:
+    with arq.open("r", encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def salvar_vinculos(vinculos: dict) -> None:
-    _ARQ_VINCULO.parent.mkdir(parents=True, exist_ok=True)
+def salvar_vinculos(perfil: str, vinculos: dict) -> None:
+    arq = perfis.caminho_vinculos(perfil)
     limpo = {k: v for k, v in vinculos.items() if k and v}
-    with _ARQ_VINCULO.open("w", encoding="utf-8") as fh:
+    with arq.open("w", encoding="utf-8") as fh:
         json.dump(dict(sorted(limpo.items())), fh, ensure_ascii=False, indent=2)
 
 

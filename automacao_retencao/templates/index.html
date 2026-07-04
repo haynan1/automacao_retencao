@@ -7,29 +7,39 @@
 {% block content %}
 <div class="row g-5 align-items-start">
   <div class="col-lg-5">
-    <p class="display-eyebrow mb-2">Fundo Municipal de Saúde</p>
+    <p class="display-eyebrow mb-2">Retenções por secretaria</p>
     <h1 class="hero mb-3">Retenções preenchidas<br>sem erro manual.</h1>
     <p class="lead-muted">
-      Envie a <strong>Listagem de Eventos</strong> e a planilha modelo de
-      <strong>Retenção</strong>. O sistema preenche automaticamente por lotação,
-      rubrica e tipo de folha — preservando fórmulas, estilos e dashboard — e
-      mostra exatamente o que identificou, o que preencheu e o que ficou pendente.
+      Escolha a <strong>secretaria</strong>, envie a <strong>Listagem de Eventos</strong>
+      e use o molde fixo (ou envie um). O sistema preenche por lotação, rubrica e tipo
+      de folha — preservando fórmulas e dashboard — e mostra o que preencheu e o que ficou pendente.
     </p>
     <ul class="list-unstyled mt-4 d-grid gap-2 text-secondary">
       <li><i class="bi bi-shield-check text-success me-2"></i>Fórmulas e layout do modelo permanecem intactos.</li>
-      <li><i class="bi bi-diagram-3 text-success me-2"></i>Agregação por setor · tipo · rubrica.</li>
-      <li><i class="bi bi-clipboard-data text-success me-2"></i>Aba de conferência gerada automaticamente.</li>
+      <li><i class="bi bi-diagram-3 text-success me-2"></i>Vínculos aprendidos e isolados por secretaria.</li>
+      <li><i class="bi bi-clipboard-data text-success me-2"></i>Reconciliação ao centavo e aba de conferência.</li>
     </ul>
   </div>
 
   <div class="col-lg-7">
     <form action="{{ url_for('analisar') }}" method="post" enctype="multipart/form-data" id="form-analisar">
+      <!-- Secretaria (perfil) -->
+      <div class="panel-pad panel mb-3">
+        <label class="section-title d-block mb-2" for="perfil"><i class="bi bi-building me-1"></i>Secretaria</label>
+        <select name="perfil" id="perfil" class="form-select">
+          {% for p in perfis %}
+          <option value="{{ p.slug }}" {% if p.slug == perfil_padrao %}selected{% endif %}>{{ p.nome }}</option>
+          {% endfor %}
+        </select>
+        <div class="small text-secondary mt-2">Cada secretaria tem seu molde fixo e seus vínculos aprendidos, isolados.</div>
+      </div>
+
       <div class="row g-3">
         <div class="col-md-6">
           <label class="panel upload-card h-100 d-flex flex-column gap-3" id="card-listagem">
             <div class="d-flex align-items-center justify-content-between">
               <span class="upload-icon"><i class="bi bi-filetype-xlsx"></i></span>
-              <span class="chip">1º arquivo</span>
+              <span class="chip">Listagem</span>
             </div>
             <div>
               <div class="fw-semibold">Listagem de Eventos</div>
@@ -41,18 +51,42 @@
         </div>
 
         <div class="col-md-6">
-          <label class="panel upload-card h-100 d-flex flex-column gap-3" id="card-modelo">
+          <div class="panel h-100 d-flex flex-column gap-3" id="card-modelo">
             <div class="d-flex align-items-center justify-content-between">
               <span class="upload-icon"><i class="bi bi-table"></i></span>
-              <span class="chip">2º arquivo</span>
+              <span class="chip">Molde</span>
             </div>
             <div>
-              <div class="fw-semibold">Planilha Modelo — Retenção</div>
+              <div class="fw-semibold">Modelo — Retenção</div>
               <div class="text-secondary small">Planilha com setores e fórmulas (.xlsx)</div>
             </div>
-            <div class="small text-info mt-auto" data-empty="Clique para selecionar" id="nome-modelo">Clique para selecionar</div>
-            <input type="file" name="modelo" accept=".xlsx" required id="input-modelo">
-          </label>
+
+            <div class="d-grid gap-2 mt-1">
+              <label class="opt-modelo d-flex align-items-start gap-2 p-2 rounded" id="opt-fixo" for="fonte-fixo">
+                <input class="form-check-input mt-1" type="radio" name="fonte_modelo" value="fixo" id="fonte-fixo">
+                <span>
+                  <span class="fw-semibold d-block">Usar molde fixo</span>
+                  <span class="text-secondary small" id="molde-fixo-label">—</span>
+                </span>
+              </label>
+              <label class="opt-modelo d-flex align-items-start gap-2 p-2 rounded" for="fonte-upload">
+                <input class="form-check-input mt-1" type="radio" name="fonte_modelo" value="upload" id="fonte-upload">
+                <span><span class="fw-semibold d-block">Enviar outro molde</span>
+                  <span class="text-secondary small">Substitui apenas nesta análise</span></span>
+              </label>
+            </div>
+
+            <div id="bloco-upload-modelo" class="mt-auto">
+              <label class="upload-inline d-block p-2 rounded">
+                <span class="small text-info" data-empty="Clique para selecionar o molde (.xlsx)" id="nome-modelo">Clique para selecionar o molde (.xlsx)</span>
+                <input type="file" name="modelo" accept=".xlsx" id="input-modelo">
+              </label>
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" name="definir_molde_fixo" id="definir-fixo">
+                <label class="form-check-label small" for="definir-fixo">Definir como <strong>molde fixo</strong> desta secretaria (fica salvo)</label>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -70,25 +104,51 @@
 
 {% block scripts %}
 <script>
-  function bind(inputId, nameId, cardId) {
-    const input = document.getElementById(inputId);
-    const name = document.getElementById(nameId);
-    const card = document.getElementById(cardId);
-    input.addEventListener('change', () => {
-      if (input.files.length) {
-        name.textContent = input.files[0].name;
-        name.classList.remove('text-info'); name.classList.add('text-success');
-        card.classList.add('filled');
-      } else {
-        name.textContent = name.dataset.empty;
-        card.classList.remove('filled');
-      }
-    });
-  }
-  bind('input-listagem', 'nome-listagem', 'card-listagem');
-  bind('input-modelo', 'nome-modelo', 'card-modelo');
+  const MOLDES = {{ moldes|tojson }};
 
-  document.getElementById('form-analisar').addEventListener('submit', (e) => {
+  const inLista = document.getElementById('input-listagem');
+  const nmLista = document.getElementById('nome-listagem');
+  const cardLista = document.getElementById('card-listagem');
+  inLista.addEventListener('change', () => {
+    const has = inLista.files.length > 0;
+    nmLista.textContent = has ? inLista.files[0].name : nmLista.dataset.empty;
+    nmLista.classList.toggle('text-success', has); nmLista.classList.toggle('text-info', !has);
+    cardLista.classList.toggle('filled', has);
+  });
+
+  const inModelo = document.getElementById('input-modelo');
+  const nmModelo = document.getElementById('nome-modelo');
+  inModelo.addEventListener('change', () => {
+    const has = inModelo.files.length > 0;
+    nmModelo.textContent = has ? inModelo.files[0].name : nmModelo.dataset.empty;
+    nmModelo.classList.toggle('text-success', has); nmModelo.classList.toggle('text-info', !has);
+  });
+
+  const perfilSel = document.getElementById('perfil');
+  const optFixo = document.getElementById('opt-fixo');
+  const rFixo = document.getElementById('fonte-fixo');
+  const rUpload = document.getElementById('fonte-upload');
+  const bloco = document.getElementById('bloco-upload-modelo');
+  const labelFixo = document.getElementById('molde-fixo-label');
+
+  function refreshMolde() {
+    const info = MOLDES[perfilSel.value];
+    if (info) {
+      optFixo.style.display = '';
+      labelFixo.textContent = info.nome_original + (info.definido_em ? ' · definido em ' + info.definido_em : '');
+      if (!rUpload.checked) { rFixo.checked = true; }
+    } else {
+      optFixo.style.display = 'none';
+      rUpload.checked = true;
+    }
+    bloco.classList.toggle('d-none', rFixo.checked);
+  }
+  perfilSel.addEventListener('change', () => { rFixo.checked = true; refreshMolde(); });
+  [rFixo, rUpload].forEach(r => r.addEventListener('change', () =>
+    bloco.classList.toggle('d-none', rFixo.checked)));
+  refreshMolde();
+
+  document.getElementById('form-analisar').addEventListener('submit', () => {
     const btn = document.getElementById('btn-analisar');
     btn.disabled = true;
     btn.querySelector('.label').classList.add('d-none');

@@ -31,7 +31,7 @@ from flask import (
 from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
 
-from services import conferencia, mapeador, preenchimento
+from services import conferencia, mapeador, perfis, preenchimento
 from services.parser_listagem import extrair_lancamentos
 from services.utils import (
     OUTPUTS_DIR,
@@ -119,33 +119,82 @@ def _detectar_modelo(caminho_modelo: str, aba_preferida: str | None):
 
 @app.route("/")
 def index():
-    return render_template("index.html", max_mb=MAX_UPLOAD_MB)
+    lista = perfis.listar_perfis()
+    moldes = {p["slug"]: perfis.info_molde(p["slug"]) for p in lista}
+    return render_template(
+        "index.html",
+        max_mb=MAX_UPLOAD_MB,
+        perfis=lista,
+        perfil_padrao=perfis.slug_padrao(),
+        moldes=moldes,
+    )
 
 
 @app.route("/analisar", methods=["POST"])
 def analisar():
     try:
         f_origem = request.files.get("listagem")
-        f_modelo = request.files.get("modelo")
-        if not f_origem or not f_origem.filename or not f_modelo or not f_modelo.filename:
+        if not f_origem or not f_origem.filename:
             return render_template(
                 "erro.html",
-                titulo="Arquivos faltando",
-                mensagem="Envie os dois arquivos: Listagem de Eventos e Planilha Modelo.",
+                titulo="Listagem faltando",
+                mensagem="Envie a Listagem de Eventos (XLSX) exportada do sistema.",
             ), 400
 
         sid = novo_id_sessao()
         nome_origem, path_origem = _salvar_upload(f_origem, f"{sid}_origem")
-        nome_modelo, path_modelo = _salvar_upload(f_modelo, f"{sid}_modelo")
+
+        # --- Perfil (secretaria) ---
+        perfil = (request.form.get("perfil") or "").strip() or perfis.slug_padrao()
+        if not perfis.perfil_valido(perfil):
+            perfil = perfis.slug_padrao()
+
+        # --- Origem do molde: fixo (versionado por perfil) ou upload ---
+        fonte_modelo = (request.form.get("fonte_modelo") or "").strip()
+        f_modelo = request.files.get("modelo")
+        usar_fixo = fonte_modelo == "fixo" or (
+            not fonte_modelo and perfis.existe_molde(perfil) and (not f_modelo or not f_modelo.filename)
+        )
+
+        if usar_fixo:
+            if not perfis.existe_molde(perfil):
+                return render_template(
+                    "erro.html",
+                    titulo="Sem molde fixo",
+                    mensagem="Este perfil não tem molde fixo definido. Envie uma planilha modelo.",
+                ), 400
+            info = perfis.info_molde(perfil) or {}
+            nome_modelo = info.get("nome_original", "molde_padrao.xlsx")
+            path_modelo = str(perfis.caminho_molde(perfil))
+        else:
+            if not f_modelo or not f_modelo.filename:
+                return render_template(
+                    "erro.html",
+                    titulo="Molde faltando",
+                    mensagem="Envie a planilha modelo (RETENÇÃO) ou escolha o molde fixo.",
+                ), 400
+            nome_modelo, path_modelo = _salvar_upload(f_modelo, f"{sid}_modelo")
+            if request.form.get("definir_molde_fixo") == "on":
+                perfis.definir_molde(perfil, path_modelo, nome_modelo)
+                log.info("Molde fixo do perfil '%s' atualizado: %s", perfil, nome_modelo)
 
         # --- Parsing do relatório de origem ---
         cfg = mapeador.carregar_config_rubricas()
         regras_rubricas = cfg["regras"]
         fora_de_escopo = cfg["fora_de_escopo"]
-        vinculos = mapeador.carregar_vinculos()
+        vinculos = mapeador.carregar_vinculos(perfil)
 
         resultado = extrair_lancamentos(path_origem)
         lancamentos = resultado["lancamentos"]
+
+        # Autodeteccao de secretaria pelo cabecalho — apenas aviso, nao bloqueia.
+        detectado = perfis.detectar_perfil(resultado.get("banners", []))
+        aviso_perfil = None
+        if detectado and detectado != perfil:
+            aviso_perfil = (
+                f"A Listagem parece ser de '{perfis.nome_perfil(detectado)}', "
+                f"mas você selecionou '{perfis.nome_perfil(perfil)}'. Confira o perfil."
+            )
 
         if not resultado.get("faixas"):
             return render_template(
@@ -192,7 +241,7 @@ def analisar():
             ), 422
 
         # --- Mapeamentos (eixo A: lotação→setor; eixo B: rubrica/evento→coluna) ---
-        mapa_lotacoes = mapeador.carregar_mapeamento_lotacoes()
+        mapa_lotacoes = mapeador.carregar_mapeamento_lotacoes(perfil)
         mapeador.aplicar_mapeamentos(lancamentos, mapa_lotacoes, regras_rubricas)
         mapeador.resolver_colunas(lancamentos, colunas_modelo, fora_de_escopo, vinculos)
         pendencias = mapeador.detectar_pendencias(lancamentos)
@@ -214,6 +263,9 @@ def analisar():
 
         dados = {
             "id": sid,
+            "perfil": perfil,
+            "perfil_nome": perfis.nome_perfil(perfil),
+            "aviso_perfil": aviso_perfil,
             "competencia": resultado["competencia"],
             "aba_origem": resultado["aba"],
             "arquivo_origem_nome": nome_origem,
@@ -256,6 +308,8 @@ def preview(sid):
     return render_template(
         "preview.html",
         sid=sid,
+        perfil_nome=dados.get("perfil_nome"),
+        aviso_perfil=dados.get("aviso_perfil"),
         competencia=dados["competencia"],
         qtd_lancamentos=len(dados["lancamentos"]),
         qtd_lotacoes=len(dados["lotacoes"]),
@@ -294,6 +348,7 @@ def processar(sid):
         lotacoes = dados["lotacoes"]
         grupos = dados["grupos"]
         fora_de_escopo = dados["fora_de_escopo"]
+        perfil = dados.get("perfil") or perfis.slug_padrao()
 
         # --- Eixo A: lotação → setor (por índice, robusto a acentos) ---
         overrides_lot: dict[str, str] = {}
@@ -306,7 +361,7 @@ def processar(sid):
                 reg["setor_destino"] = overrides_lot[reg["lotacao_original"]]
 
         # --- Eixo B: evento/rubrica → coluna (menu suspenso), aprendido ---
-        vinculos = mapeador.carregar_vinculos()
+        vinculos = mapeador.carregar_vinculos(perfil)
         for i, g in enumerate(grupos):
             escolha = (request.form.get(f"coluna_{i}") or "").strip()
             if escolha:  # vazio = manter automático
@@ -329,14 +384,14 @@ def processar(sid):
         # Re-resolve rubrica→coluna já com os vínculos escolhidos.
         mapeador.resolver_colunas(lancamentos, colunas_modelo, fora_de_escopo, vinculos)
 
-        # Persistir mapeamentos aprendidos, se solicitado.
+        # Persistir mapeamentos aprendidos no perfil, se solicitado.
         if request.form.get("salvar_mapeamento") == "on":
             if overrides_lot:
-                mapa = mapeador.carregar_mapeamento_lotacoes()
+                mapa = mapeador.carregar_mapeamento_lotacoes(perfil)
                 mapa.update(overrides_lot)
-                mapeador.salvar_mapeamento_lotacoes(mapa)
-            mapeador.salvar_vinculos(vinculos)
-            log.info("Vínculos salvos: %d lotações, %d rubricas.", len(overrides_lot), len(vinculos))
+                mapeador.salvar_mapeamento_lotacoes(perfil, mapa)
+            mapeador.salvar_vinculos(perfil, vinculos)
+            log.info("Perfil '%s': %d lotações, %d rubricas salvas.", perfil, len(overrides_lot), len(vinculos))
 
         # --- Agregação e preenchimento ---
         agregados, baldes = conferencia.agregar_lancamentos(lancamentos)

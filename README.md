@@ -78,14 +78,19 @@ Acesse: **http://127.0.0.1:5000**
 ```
 automacao_retencao/
 ├── app.py                 # Camada web (Flask) — apenas orquestração
-├── config/                # Mapeamentos editáveis (JSON, sem código)
-│   ├── mapeamento_lotacoes.json        # lotação → setor (aprendido)
-│   ├── mapeamento_rubricas.json        # regras de rubrica + "fora de escopo"
-│   └── vinculo_rubrica_coluna.json     # evento/rubrica → coluna (aprendido)
+├── config/
+│   ├── mapeamento_rubricas.json        # regras de rubrica + "fora de escopo" (compartilhado)
+│   ├── perfis.json                     # registro de secretarias (perfis)
+│   └── perfis/<secretaria>/            # dados isolados por secretaria (aprendidos)
+│       ├── mapeamento_lotacoes.json    #   lotação → setor
+│       └── vinculo_rubrica_coluna.json #   evento/rubrica → coluna
+├── modelos/
+│   └── perfis/<secretaria>/molde_padrao.xlsx   # molde fixo versionado (blank)
 ├── services/              # Regra de negócio, isolada do Flask
 │   ├── parser_listagem.py # Lê o relatório de origem (merged-aware, anti-ruído)
 │   ├── normalizador.py    # Texto, folha e rubrica normalizados
 │   ├── mapeador.py        # Dois eixos de vínculo + aprendizado + pendências
+│   ├── perfis.py          # Perfis por secretaria: molde fixo + vínculos isolados
 │   ├── preenchimento.py   # Localiza blocos/colunas e preenche o modelo
 │   ├── conferencia.py     # Agregação, reconciliação e aba de conferência
 │   └── utils.py           # Pastas, logs, nomes e sessão em disco
@@ -103,8 +108,15 @@ automacao_retencao/
   Descrição e Folha ⇒ não é linha tabular).
 - **Detecção dinâmica**: setores, colunas de rubrica e linhas de tipo são
   localizados pela *estrutura* da planilha, não por coordenadas fixas.
+- **Perfis por secretaria**: o motor é 100% reaproveitado entre secretarias; o que
+  muda é só o *dado* de cada uma (molde fixo + vínculos aprendidos), isolado em
+  `config/perfis/<secretaria>/` e `modelos/perfis/<secretaria>/`. A secretaria é
+  escolhida na tela inicial e **auto-sugerida** pelo cabeçalho da Listagem.
+- **Molde fixo versionado**: cada secretaria pode ter um molde padrão no repositório
+  (blank, sem dados pessoais) — quem clona já processa enviando só a Listagem.
 - **Dois eixos de vínculo com aprendizado**: lotação→setor e evento/rubrica→coluna,
   ambos com sugestão automática, menu suspenso e persistência em JSON.
+- **Interface dark-first com modo claro** em um clique (tema persistido no navegador).
 - **Colunas do modelo = fonte da verdade**: nunca se escreve numa coluna que não
   exista; rubricas sem coluna viram pendência ou “fora de escopo”, nunca erro mudo.
 - **Reconciliação exata**: `total lido = preenchido + fora de escopo + sem vínculo

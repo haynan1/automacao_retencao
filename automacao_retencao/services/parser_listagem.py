@@ -214,6 +214,7 @@ def extrair_lancamentos(caminho_xlsx: str | Path) -> dict:
     lotacao_atual: str | None = None
     em_resumo = False
     total_relatorio: Decimal | None = None
+    banners: list[str] = []  # cabecalhos (orgao/secretaria) para autodeteccao
 
     for r in range(1, ws.max_row + 1):
         segs = _segmentos_da_linha(ws, r, max_col, mescladas)
@@ -237,7 +238,10 @@ def extrair_lancamentos(caminho_xlsx: str | Path) -> dict:
                 lotacao_atual = texto
             elif normalizar_texto(texto).startswith("RESUMO"):
                 em_resumo = True
-            # banners, evento, emitido, pagina -> ignorados
+            elif texto and not texto.startswith("Evento:") and len(banners) < 12:
+                # cabecalho (municipio/orgao/secretaria) — util p/ autodeteccao
+                if texto not in banners:
+                    banners.append(texto)
             continue
 
         if em_resumo:
@@ -288,6 +292,7 @@ def extrair_lancamentos(caminho_xlsx: str | Path) -> dict:
         "lotacoes": lotacoes,
         "lancamentos": lancamentos,
         "faixas": faixas,
+        "banners": banners,
         "total_relatorio": total_relatorio,
     }
 
