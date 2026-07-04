@@ -90,25 +90,25 @@ def _sessao_ou_404(sid: str) -> dict:
     return dados
 
 
-def _detectar_setores_modelo(caminho_modelo: str, aba_preferida: str | None):
-    """Abre o modelo e detecta setores e abas disponíveis.
+def _detectar_modelo(caminho_modelo: str, aba_preferida: str | None):
+    """Abre o modelo e detecta setores, colunas de rubrica e abas.
 
-    Retorna (setores: list[str], abas: list[str], aba_analisada: str|None).
+    Retorna (setores, colunas_modelo, abas, aba_analisada).
     """
     wb = load_workbook(caminho_modelo, data_only=False)
     try:
         abas = list(wb.sheetnames)
         alvo = aba_preferida if aba_preferida in abas else None
         if alvo is None:
-            # Primeira aba que não seja a de conferência.
-            for nome in abas:
+            for nome in abas:  # primeira aba que não seja de conferência
                 if "CONFER" not in nome.upper():
                     alvo = nome
                     break
         ws = wb[alvo] if alvo else wb.worksheets[0]
         blocos = preenchimento.localizar_blocos_setores(ws)
         setores = [b["setor"] for b in blocos]
-        return setores, abas, alvo
+        colunas = preenchimento.listar_colunas_modelo(ws)
+        return setores, colunas, abas, alvo
     finally:
         wb.close()
 
@@ -139,11 +139,15 @@ def analisar():
         nome_modelo, path_modelo = _salvar_upload(f_modelo, f"{sid}_modelo")
 
         # --- Parsing do relatório de origem ---
-        regras_rubricas = mapeador.carregar_regras_rubricas()
+        cfg = mapeador.carregar_config_rubricas()
+        regras_rubricas = cfg["regras"]
+        fora_de_escopo = cfg["fora_de_escopo"]
+        vinculos = mapeador.carregar_vinculos()
+
         resultado = extrair_lancamentos(path_origem)
         lancamentos = resultado["lancamentos"]
 
-        if resultado["cabecalho"] is None:
+        if not resultado.get("faixas"):
             return render_template(
                 "erro.html",
                 titulo="Estrutura não reconhecida",
@@ -168,7 +172,7 @@ def analisar():
                 mensagem="Não foram encontradas lotações no formato '5.0000.0000 - FMS, ...'.",
             ), 422
 
-        # --- Detecta setores/abas do modelo ---
+        # --- Detecta setores/colunas/abas do modelo ---
         aba_sugerida = None
         wb_tmp = load_workbook(path_modelo, data_only=False, read_only=True)
         try:
@@ -176,7 +180,7 @@ def analisar():
         finally:
             wb_tmp.close()
 
-        setores_planilha, abas_modelo, _ = _detectar_setores_modelo(path_modelo, aba_sugerida)
+        setores_planilha, colunas_modelo, abas_modelo, _ = _detectar_modelo(path_modelo, aba_sugerida)
         if not setores_planilha:
             return render_template(
                 "erro.html",
@@ -187,12 +191,12 @@ def analisar():
                 ),
             ), 422
 
-        # --- Mapeamentos ---
+        # --- Mapeamentos (eixo A: lotação→setor; eixo B: rubrica/evento→coluna) ---
         mapa_lotacoes = mapeador.carregar_mapeamento_lotacoes()
         mapeador.aplicar_mapeamentos(lancamentos, mapa_lotacoes, regras_rubricas)
+        mapeador.resolver_colunas(lancamentos, colunas_modelo, fora_de_escopo, vinculos)
         pendencias = mapeador.detectar_pendencias(lancamentos)
 
-        # --- Estrutura para as telas ---
         lotacoes_info = []
         for lot in resultado["lotacoes"]:
             setor = mapeador.mapear_lotacao(lot, mapa_lotacoes)
@@ -201,8 +205,11 @@ def analisar():
                 {"lotacao": lot, "setor_atual": setor, "sugestao": sugestao, "mapeada": bool(setor)}
             )
 
+        grupos = mapeador.construir_grupos_rubricas(
+            lancamentos, colunas_modelo, fora_de_escopo, vinculos
+        )
         rubricas_identificadas = sorted(
-            {reg["rubrica_destino"] for reg in lancamentos if reg["rubrica_destino"]}
+            {g["coluna"] for g in grupos if g["status"] == "ok" and g["coluna"]}
         )
 
         dados = {
@@ -217,14 +224,17 @@ def analisar():
             "lotacoes": resultado["lotacoes"],
             "lotacoes_info": lotacoes_info,
             "setores_planilha": setores_planilha,
+            "colunas_modelo": colunas_modelo,
+            "fora_de_escopo": fora_de_escopo,
+            "grupos": grupos,
             "abas_modelo": abas_modelo,
             "aba_sugerida": aba_sugerida,
             "rubricas_identificadas": rubricas_identificadas,
             "pendencias": pendencias,
         }
         salvar_sessao(sid, dados)
-        log.info("Análise concluída sid=%s lançamentos=%d lotações=%d",
-                 sid, len(lancamentos), len(resultado["lotacoes"]))
+        log.info("Análise concluída sid=%s lançamentos=%d lotações=%d grupos=%d",
+                 sid, len(lancamentos), len(resultado["lotacoes"]), len(grupos))
         return redirect(url_for("preview", sid=sid))
 
     except ValueError as exc:
@@ -251,8 +261,10 @@ def preview(sid):
         qtd_lotacoes=len(dados["lotacoes"]),
         rubricas=dados["rubricas_identificadas"],
         lotacoes_info=dados["lotacoes_info"],
+        grupos=dados["grupos"],
         lotacoes_nao_mapeadas=p["lotacoes_nao_mapeadas"],
-        rubricas_nao_mapeadas=p["rubricas_nao_mapeadas"],
+        rubricas_sem_vinculo=p["rubricas_sem_vinculo"],
+        rubricas_fora_escopo=p["rubricas_fora_escopo"],
         folhas_desconhecidas=p["folhas_desconhecidas"],
     )
 
@@ -265,9 +277,12 @@ def mapeamento(sid):
         sid=sid,
         lotacoes_info=dados["lotacoes_info"],
         setores=dados["setores_planilha"],
+        colunas=dados["colunas_modelo"],
+        grupos=dados["grupos"],
         abas=dados["abas_modelo"],
         aba_sugerida=dados["aba_sugerida"],
         competencia=dados["competencia"],
+        IGNORAR=mapeador.IGNORAR,
     )
 
 
@@ -277,48 +292,61 @@ def processar(sid):
     try:
         lancamentos = dados["lancamentos"]
         lotacoes = dados["lotacoes"]
+        grupos = dados["grupos"]
+        fora_de_escopo = dados["fora_de_escopo"]
 
-        # --- Mapeamento vindo do formulário (por índice, robusto a acentos) ---
-        overrides: dict[str, str] = {}
+        # --- Eixo A: lotação → setor (por índice, robusto a acentos) ---
+        overrides_lot: dict[str, str] = {}
         for i, lot in enumerate(lotacoes):
             valor = (request.form.get(f"setor_{i}") or "").strip()
             if valor:
-                overrides[lot] = valor
-
+                overrides_lot[lot] = valor
         for reg in lancamentos:
-            if reg["lotacao_original"] in overrides:
-                reg["setor_destino"] = overrides[reg["lotacao_original"]]
+            if reg["lotacao_original"] in overrides_lot:
+                reg["setor_destino"] = overrides_lot[reg["lotacao_original"]]
 
-        # Persistir mapeamento de lotações, se solicitado.
-        if request.form.get("salvar_mapeamento") == "on":
-            mapa = mapeador.carregar_mapeamento_lotacoes()
-            mapa.update(overrides)
-            mapeador.salvar_mapeamento_lotacoes(mapa)
-            log.info("Mapeamento de lotações atualizado (%d entradas).", len(overrides))
+        # --- Eixo B: evento/rubrica → coluna (menu suspenso), aprendido ---
+        vinculos = mapeador.carregar_vinculos()
+        for i, g in enumerate(grupos):
+            escolha = (request.form.get(f"coluna_{i}") or "").strip()
+            if escolha:  # vazio = manter automático
+                vinculos[g["chave"]] = escolha
 
         # --- Aba de destino ---
         aba_destino = (request.form.get("aba_destino") or "").strip()
         if aba_destino not in dados["abas_modelo"]:
             return render_template(
-                "erro.html",
-                titulo="Aba inválida",
+                "erro.html", titulo="Aba inválida",
                 mensagem="Selecione uma aba de destino existente na planilha modelo.",
             ), 400
 
-        # --- Agregação ---
-        agregados, ignorados = conferencia.agregar_lancamentos(lancamentos)
-
-        # --- Preenchimento no modelo ---
+        # --- Abre o modelo e usa as colunas REAIS da aba escolhida ---
         wb = load_workbook(dados["arquivo_modelo_path"], data_only=False)
         ws = wb[aba_destino]
         blocos = preenchimento.localizar_blocos_setores(ws)
+        colunas_modelo = preenchimento.listar_colunas_modelo(ws)
+
+        # Re-resolve rubrica→coluna já com os vínculos escolhidos.
+        mapeador.resolver_colunas(lancamentos, colunas_modelo, fora_de_escopo, vinculos)
+
+        # Persistir mapeamentos aprendidos, se solicitado.
+        if request.form.get("salvar_mapeamento") == "on":
+            if overrides_lot:
+                mapa = mapeador.carregar_mapeamento_lotacoes()
+                mapa.update(overrides_lot)
+                mapeador.salvar_mapeamento_lotacoes(mapa)
+            mapeador.salvar_vinculos(vinculos)
+            log.info("Vínculos salvos: %d lotações, %d rubricas.", len(overrides_lot), len(vinculos))
+
+        # --- Agregação e preenchimento ---
+        agregados, baldes = conferencia.agregar_lancamentos(lancamentos)
         preenchimento.limpar_area_lancamento(ws, blocos)
         relatorio = preenchimento.preencher_valores(ws, agregados, blocos)
 
-        # --- Totais e conferência ---
+        # --- Totais, reconciliação e conferência ---
         total_lido = conferencia.calcular_totais_lidos(lancamentos)
         agregados_tot = conferencia.calcular_totais_agregados(agregados)
-        pend = conferencia.calcular_pendencias(ignorados, relatorio["pendencias_estrutura"])
+        rec = conferencia.reconciliar(total_lido, baldes, relatorio["pendencias_estrutura"])
         pendencias_map = mapeador.detectar_pendencias(lancamentos)
 
         dados_conf = {
@@ -326,14 +354,13 @@ def processar(sid):
             "arquivo_origem": dados["arquivo_origem_nome"],
             "arquivo_modelo": dados["arquivo_modelo_nome"],
             "aba_destino": aba_destino,
-            "total_lido": total_lido,
-            "total_preenchido": relatorio["total_preenchido"],
-            "total_pendente": pend["total_pendente"],
+            "reconciliacao": rec,
             "por_setor": agregados_tot["por_setor"],
-            "por_rubrica": agregados_tot["por_rubrica"],
+            "por_coluna": agregados_tot["por_coluna"],
             "por_tipo": agregados_tot["por_tipo"],
             "lotacoes_nao_mapeadas": pendencias_map["lotacoes_nao_mapeadas"],
-            "rubricas_nao_mapeadas": pendencias_map["rubricas_nao_mapeadas"],
+            "rubricas_sem_vinculo": pendencias_map["rubricas_sem_vinculo"],
+            "rubricas_fora_escopo": pendencias_map["rubricas_fora_escopo"],
             "folhas_desconhecidas": pendencias_map["folhas_desconhecidas"],
             "pendencias_estrutura": relatorio["pendencias_estrutura"],
         }
@@ -348,26 +375,24 @@ def processar(sid):
         wb.save(caminho_saida)
         wb.close()
 
-        # --- Persistir resumo para a tela final ---
         dados["output_nome"] = nome_saida
         dados["output_path"] = str(caminho_saida)
         dados["resumo"] = {
             "aba_destino": aba_destino,
-            "total_lido": total_lido,
-            "total_preenchido": relatorio["total_preenchido"],
-            "total_pendente": pend["total_pendente"],
+            "reconciliacao": rec,
             "por_setor": agregados_tot["por_setor"],
-            "por_rubrica": agregados_tot["por_rubrica"],
+            "por_coluna": agregados_tot["por_coluna"],
             "por_tipo": agregados_tot["por_tipo"],
             "qtd_celulas": len(relatorio["preenchidos"]),
             "pendencias_estrutura": relatorio["pendencias_estrutura"],
             "lotacoes_nao_mapeadas": pendencias_map["lotacoes_nao_mapeadas"],
-            "rubricas_nao_mapeadas": pendencias_map["rubricas_nao_mapeadas"],
+            "rubricas_sem_vinculo": pendencias_map["rubricas_sem_vinculo"],
+            "rubricas_fora_escopo": pendencias_map["rubricas_fora_escopo"],
             "folhas_desconhecidas": pendencias_map["folhas_desconhecidas"],
         }
         salvar_sessao(sid, dados)
-        log.info("Processamento concluído sid=%s células=%d saída=%s",
-                 sid, len(relatorio["preenchidos"]), nome_saida)
+        log.info("Processamento concluído sid=%s células=%d confere=%s saída=%s",
+                 sid, len(relatorio["preenchidos"]), rec["confere"], nome_saida)
         return redirect(url_for("resultado", sid=sid))
 
     except KeyError as exc:

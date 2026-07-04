@@ -7,9 +7,9 @@
 <form action="{{ url_for('processar', sid=sid) }}" method="post" id="form-processar">
   <div class="d-flex align-items-end justify-content-between flex-wrap gap-3 mb-4">
     <div>
-      <p class="display-eyebrow mb-1">Mapeamento</p>
-      <h1 class="hero" style="font-size: clamp(1.6rem, 3vw, 2.2rem);">Confirme lotação → setor</h1>
-      <p class="lead-muted mt-2">Ajuste qualquer associação antes de preencher. Deixe em branco para <strong>ignorar</strong> uma lotação.</p>
+      <p class="display-eyebrow mb-1">Mapeamento manual</p>
+      <h1 class="hero" style="font-size: clamp(1.6rem, 3vw, 2.2rem);">Vincule antes de preencher</h1>
+      <p class="lead-muted mt-2">Confira os dois vínculos abaixo. Tudo com sugestão automática — você só ajusta o que precisar. As escolhas ficam salvas para os próximos meses.</p>
     </div>
   </div>
 
@@ -29,13 +29,15 @@
         <div class="form-check">
           <input class="form-check-input" type="checkbox" name="salvar_mapeamento" id="salvar" checked>
           <label class="form-check-label small" for="salvar">
-            Salvar este mapeamento de lotações para os próximos meses (config/mapeamento_lotacoes.json)
+            Aprender e salvar estes vínculos (lotações e rubricas) para os próximos meses
           </label>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- EIXO A: Lotação → Setor -->
+  <div class="section-title mb-2"><i class="bi bi-diagram-3 me-1"></i>Eixo 1 · Lotação → Setor</div>
   <div class="table-wrap mb-4">
     <div class="table-responsive">
       <table class="table align-middle">
@@ -45,11 +47,8 @@
           <tr>
             <td class="small">
               {{ item.lotacao }}
-              {% if not item.mapeada and item.sugestao %}
-                <span class="chip warn ms-2"><i class="bi bi-magic"></i> sugerido</span>
-              {% elif not item.mapeada %}
-                <span class="chip danger ms-2">novo</span>
-              {% endif %}
+              {% if not item.mapeada and item.sugestao %}<span class="chip warn ms-2"><i class="bi bi-magic"></i> sugerido</span>
+              {% elif not item.mapeada %}<span class="chip danger ms-2">novo</span>{% endif %}
             </td>
             <td>
               <select name="setor_{{ loop.index0 }}" class="form-select form-select-sm">
@@ -57,6 +56,50 @@
                 {% for setor in setores %}
                 <option value="{{ setor }}" {% if item.sugestao == setor %}selected{% endif %}>{{ setor }}</option>
                 {% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EIXO B: Evento/Rubrica → Coluna do modelo -->
+  <div class="section-title mb-2"><i class="bi bi-link-45deg me-1"></i>Eixo 2 · Evento / Rubrica → Coluna do modelo</div>
+  <p class="text-secondary small mb-2">
+    Cada evento do relatório é vinculado a uma coluna da planilha. Pendentes aparecem primeiro.
+    Deixe em <em>“Automático”</em> para aceitar a sugestão, escolha uma coluna, ou marque
+    <em>“Fora de escopo”</em> para não preencher.
+  </p>
+  <div class="table-wrap mb-4">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th style="width:42%">Evento / Rubrica</th><th class="text-end">Ocorr.</th><th class="text-end">Valor</th><th style="width:32%">Coluna do modelo</th></tr></thead>
+        <tbody>
+          {% for g in grupos %}
+          <tr>
+            <td class="small">
+              {{ g.rotulo }}
+              {% if g.status == 'sem_vinculo' %}<span class="chip danger ms-2"><i class="bi bi-exclamation-circle"></i> sem vínculo</span>
+              {% elif g.status == 'fora_escopo' %}<span class="chip ms-2">fora de escopo</span>
+              {% else %}<span class="chip ok ms-2"><i class="bi bi-check"></i> {{ g.coluna }}</span>{% endif %}
+            </td>
+            <td class="text-end mono small">{{ g.n }}</td>
+            <td class="text-end mono small">{{ g.total|moeda }}</td>
+            <td>
+              <select name="coluna_{{ loop.index0 }}" class="form-select form-select-sm sel-coluna {% if g.status == 'sem_vinculo' %}is-pendente{% endif %}">
+                {% if g.status == 'ok' %}
+                  <option value="">Automático → {{ g.coluna }}</option>
+                {% elif g.status == 'fora_escopo' %}
+                  <option value="">Automático → fora de escopo (ignorar)</option>
+                {% else %}
+                  <option value="">— escolher coluna —</option>
+                {% endif %}
+                {% for col in colunas %}
+                <option value="{{ col }}">{{ col }}</option>
+                {% endfor %}
+                <option value="{{ IGNORAR }}">Fora de escopo (não preencher)</option>
               </select>
             </td>
           </tr>
@@ -80,6 +123,11 @@
 
 {% block scripts %}
 <script>
+  // Destaca em vermelho selects pendentes até o usuário escolher.
+  document.querySelectorAll('.sel-coluna.is-pendente').forEach(sel => {
+    const paint = () => sel.style.borderColor = sel.value ? '' : 'var(--danger)';
+    paint(); sel.addEventListener('change', paint);
+  });
   document.getElementById('form-processar').addEventListener('submit', () => {
     const btn = document.getElementById('btn-proc');
     btn.disabled = true;

@@ -1,9 +1,18 @@
 """Leitura e interpretacao do relatorio de origem (Listagem de Eventos).
 
-O relatorio e um XLSX paginado: cabecalhos repetidos, rodapes, blocos
-por lotacao e linhas de lancamento. Este modulo transforma esse texto
-bruto em uma lista de lancamentos estruturados, sem depender cegamente
-de letras de coluna fixas.
+O relatorio real e um XLSX paginado, com forte uso de CELULAS MESCLADAS:
+- Banners, linhas de lotacao e de evento sao mesclados na largura toda (A:AC).
+- Cada campo do lancamento e uma celula mesclada (ex.: Descricao ocupa Q:V no
+  cabecalho, mas R:W nos dados — deslocada 1 coluna).
+
+Por isso NAO da para confiar na letra da coluna. A estrategia e:
+1. Resolver toda celula ao valor-ancora da sua mesclagem (segmentos da linha).
+2. Localizar o cabecalho e guardar a FAIXA de colunas de cada campo.
+3. Em cada linha, escolher o segmento com maior SOBREPOSICAO com a faixa do
+   campo. Isso torna a leitura imune a deslocamentos por mesclagem.
+4. Distinguir linha tabular de banner/lotacao/evento pela estrutura: se o
+   segmento que cobre a Descricao tambem comeca na coluna A, a linha inteira
+   e uma so mesclagem -> nao e lancamento.
 """
 
 from __future__ import annotations
@@ -21,38 +30,35 @@ _RE_LOTACAO = re.compile(r"^\s*\d+\.\d+\.\d+\s+-\s+")
 # Competencia MM/AAAA.
 _RE_COMPETENCIA = re.compile(r"\b(0[1-9]|1[0-2])/(\d{4})\b")
 
-# Rotulos possiveis de cada coluna (normalizados) para localizar o cabecalho.
-_ROTULOS_COLUNAS = {
+# Rotulos possiveis de cada campo (normalizados) para localizar o cabecalho.
+_ROTULOS = {
     "matricula": ("MAT.", "MAT", "MATRICULA"),
     "funcionario": ("FUNCIONARIO", "NOME", "SERVIDOR"),
     "cpf": ("CPF",),
     "folha": ("FOLHA",),
-    "descricao": ("DESCRICAO", "EVENTO", "DESCR"),
+    "descricao": ("DESCRICAO", "DESCR", "EVENTO"),
     "base_calculo": ("BASE DE CALC.", "BASE DE CALCULO", "BASE CALC", "BASE"),
     "referencia": ("REFER.", "REFERENCIA", "REFER"),
     "valor": ("VALOR",),
 }
 
-# Linhas de ruido que devem ser ignoradas na leitura de lancamentos.
-_MARCADORES_IGNORAR = ("FP038", "EMITIDO EM", "PAGINA", "PÁGINA")
+# Texto que, em linha mesclada de largura total, deve ser ignorado.
+_BANNER_MARCADORES = (
+    "MUNICIPIO", "FUNDO MUNICIPAL", "LISTAGEM DE EVENTOS", "EMITIDO EM",
+    "PAGINA", "FP038", "CNPJ",
+)
+# Descricoes que nao sao lancamento (ruido tabular / resumo).
+_DESC_RUIDO = {"QUANTIDADE:", "QUANTIDADE", "RESUMO", "TOTAL", "TOTAL GERAL", "DESCRICAO"}
 
 
-def _texto(celula) -> str:
-    """Valor da celula como string limpa (nunca None)."""
-    if celula is None:
-        return ""
-    return str(celula).strip()
+def _texto(v) -> str:
+    return "" if v is None else str(v).strip()
 
 
 def limpar_valor(valor) -> Decimal:
-    """Converte um valor de celula (str brasileira ou numero) em Decimal.
-
-    Aceita "28.391,15", "28391.15", 28391.15, "" -> Decimal('0.00').
-    Valores negativos e parenteses contabeis sao respeitados.
-    """
+    """Converte valor de celula (numero ou string BR) em Decimal(2 casas)."""
     if valor is None or valor == "":
         return Decimal("0.00")
-
     if isinstance(valor, (int, float)):
         try:
             return Decimal(str(valor)).quantize(Decimal("0.01"))
@@ -65,32 +71,77 @@ def limpar_valor(valor) -> Decimal:
 
     negativo = False
     if texto.startswith("(") and texto.endswith(")"):
-        negativo = True
-        texto = texto[1:-1]
+        negativo, texto = True, texto[1:-1]
     if texto.startswith("-"):
-        negativo = True
-        texto = texto[1:]
+        negativo, texto = True, texto[1:]
 
-    # Remove qualquer coisa que nao seja digito, ponto ou virgula.
     texto = re.sub(r"[^\d.,]", "", texto)
     if not texto:
         return Decimal("0.00")
-
-    # Formato brasileiro: ponto como milhar, virgula como decimal.
-    if "," in texto:
+    if "," in texto:  # formato brasileiro: ponto milhar, virgula decimal
         texto = texto.replace(".", "").replace(",", ".")
-    # Caso so tenha pontos, o ultimo ponto e o decimal (ja compativel).
 
     try:
         numero = Decimal(texto).quantize(Decimal("0.01"))
     except InvalidOperation:
         return Decimal("0.00")
-
     return -numero if negativo else numero
 
 
+def _eh_numero(texto: str) -> bool:
+    """True se o texto e apenas um numero (usado para descartar ruido)."""
+    if not texto:
+        return False
+    t = texto.replace(".", "").replace(",", "").replace("-", "").strip()
+    return t.isdigit()
+
+
+# ---------------------------------------------------------------------------
+# Modelo de segmentos (mesclagens) por linha
+# ---------------------------------------------------------------------------
+
+def _indexar_mesclagens(ws) -> dict:
+    """row -> lista de (min_col, max_col, valor_ancora) das mesclagens dessa linha."""
+    por_linha: dict[int, list] = {}
+    for mc in ws.merged_cells.ranges:
+        ancora = ws.cell(mc.min_row, mc.min_col).value
+        por_linha.setdefault(mc.min_row, []).append((mc.min_col, mc.max_col, ancora))
+    return por_linha
+
+
+def _segmentos_da_linha(ws, r: int, max_col: int, mescladas: dict) -> list:
+    """Segmentos da linha r: mesclagens (ancora) + celulas isoladas nao vazias."""
+    segs = list(mescladas.get(r, []))
+    cobertas = set()
+    for mn, mx, _ in segs:
+        cobertas.update(range(mn, mx + 1))
+    for c in range(1, max_col + 1):
+        if c in cobertas:
+            continue
+        v = ws.cell(r, c).value
+        if v is not None and str(v).strip() != "":
+            segs.append((c, c, v))
+    return segs
+
+
+def _melhor_sobreposicao(segs: list, faixa: tuple):
+    """Segmento (mn,mx,val) com maior sobreposicao com a faixa (smin,smax)."""
+    if not faixa:
+        return None
+    smin, smax = faixa
+    melhor, melhor_ov = None, 0
+    for mn, mx, val in segs:
+        ov = min(mx, smax) - max(mn, smin) + 1
+        if ov > melhor_ov:
+            melhor, melhor_ov = (mn, mx, val), ov
+    return melhor
+
+
+# ---------------------------------------------------------------------------
+# Deteccao de cabecalho, competencia e lotacoes
+# ---------------------------------------------------------------------------
+
 def detectar_competencia(ws) -> str | None:
-    """Procura a competencia MM/AAAA nas primeiras linhas do relatorio."""
     for row in ws.iter_rows(min_row=1, max_row=40, values_only=True):
         for celula in row:
             if celula is None:
@@ -101,168 +152,147 @@ def detectar_competencia(ws) -> str | None:
     return None
 
 
-def _eh_linha_lotacao(texto_a: str) -> bool:
-    return bool(_RE_LOTACAO.match(texto_a))
+def detectar_cabecalhos(ws, max_col: int, mescladas: dict) -> tuple[int | None, dict]:
+    """Localiza a linha de cabecalho e as FAIXAS (min,max) de cada campo.
 
-
-def detectar_lotacoes(ws) -> list[str]:
-    """Lista, na ordem de aparicao, todas as lotacoes do relatorio."""
-    lotacoes: list[str] = []
-    for row in ws.iter_rows(values_only=True):
-        texto_a = _texto(row[0]) if row else ""
-        if _eh_linha_lotacao(texto_a) and texto_a not in lotacoes:
-            lotacoes.append(texto_a)
-    return lotacoes
-
-
-def detectar_cabecalhos(ws) -> dict | None:
-    """Localiza a primeira linha de cabecalho de lancamentos e devolve o
-    mapa {campo: indice_coluna} (0-based). Retorna None se nao achar."""
-    for row in ws.iter_rows(values_only=True):
-        mapa = _mapear_cabecalho_da_linha(row)
-        if mapa:
-            return mapa
-    return None
-
-
-def _mapear_cabecalho_da_linha(row) -> dict | None:
-    """Se a linha for um cabecalho de lancamento, retorna {campo: idx}."""
-    if not row:
-        return None
-
-    encontrados: dict[str, int] = {}
-    for idx, celula in enumerate(row):
-        rotulo = normalizar_texto(_texto(celula))
-        if not rotulo:
-            continue
-        for campo, opcoes in _ROTULOS_COLUNAS.items():
-            if campo in encontrados:
+    Retorna (linha_cabecalho, {campo: (min_col, max_col)}). A linha valida e a
+    primeira que contenha, ao mesmo tempo, os rotulos de Descricao e Valor.
+    """
+    for r in range(1, min(ws.max_row, 200) + 1):
+        segs = _segmentos_da_linha(ws, r, max_col, mescladas)
+        faixas: dict[str, tuple] = {}
+        for mn, mx, val in segs:
+            rot = normalizar_texto(_texto(val))
+            if not rot:
                 continue
-            if rotulo in opcoes or any(rotulo == normalizar_texto(o) for o in opcoes):
-                encontrados[campo] = idx
-
-    # Consideramos cabecalho valido se localizamos descricao + valor,
-    # que sao as colunas indispensaveis para o lancamento.
-    if "descricao" in encontrados and "valor" in encontrados:
-        return encontrados
-    return None
-
-
-def linha_eh_lancamento(row, cabecalho: dict) -> bool:
-    """Heuristica: a linha e um lancamento se tiver descricao textual e
-    um valor numerico nao nulo, e nao for ruido/cabecalho/lotacao."""
-    if not row or not cabecalho:
-        return False
-
-    texto_a = _texto(row[0]) if len(row) > 0 else ""
-    if _eh_linha_lotacao(texto_a):
-        return False
-
-    # Ruido conhecido em qualquer celula.
-    linha_norm = normalizar_texto(" ".join(_texto(c) for c in row))
-    if not linha_norm:
-        return False
-    if any(marca in linha_norm for marca in _MARCADORES_IGNORAR):
-        return False
-    # Cabecalho repetido.
-    if _mapear_cabecalho_da_linha(row):
-        return False
-
-    descricao = _celula(row, cabecalho.get("descricao"))
-    if not _texto(descricao):
-        return False
-
-    valor = limpar_valor(_celula(row, cabecalho.get("valor")))
-    return valor != Decimal("0.00")
+            for campo, opcoes in _ROTULOS.items():
+                if campo in faixas:
+                    continue
+                if rot in opcoes:
+                    faixas[campo] = (mn, mx)
+        if "descricao" in faixas and "valor" in faixas:
+            return r, faixas
+    return None, {}
 
 
-def _celula(row, idx):
-    """Acesso seguro a uma celula por indice (pode estar fora do range)."""
-    if idx is None or idx < 0 or idx >= len(row):
-        return None
-    return row[idx]
+# ---------------------------------------------------------------------------
+# Extracao principal
+# ---------------------------------------------------------------------------
 
-
-def extrair_lancamentos(caminho_xlsx: str | Path, regras_rubrica: list[dict] | None = None) -> dict:
-    """Le o relatorio e devolve a estrutura completa de trabalho.
+def extrair_lancamentos(caminho_xlsx: str | Path) -> dict:
+    """Le o relatorio e devolve a estrutura de trabalho.
 
     Retorna:
         {
           "competencia": "06/2026" | None,
           "aba": "Page1",
-          "lotacoes": [...],            # ordem de aparicao
+          "lotacoes": [...],
           "lancamentos": [ {registro}, ... ],
-          "cabecalho": {campo: idx},
+          "faixas": {campo: (min,max)},
+          "total_relatorio": Decimal | None,   # total proprio do relatorio (cross-check)
         }
-
-    A rubrica destino so e resolvida se 'regras_rubrica' for informada;
-    caso contrario fica None (a camada de mapeamento resolve depois).
     """
     caminho = Path(caminho_xlsx)
-    # data_only=True: o relatorio exportado ja traz valores, nao formulas.
-    wb = load_workbook(caminho, read_only=True, data_only=True)
-    ws = wb.worksheets[0]  # primeira aba, independente do nome ("Page1").
+    # Precisamos das mesclagens -> nao usar read_only.
+    wb = load_workbook(caminho, data_only=True)
+    ws = wb.worksheets[0]
+    max_col = ws.max_column or 30
 
+    mescladas = _indexar_mesclagens(ws)
     competencia = detectar_competencia(ws)
-    cabecalho = detectar_cabecalhos(ws)
+    linha_cab, faixas = detectar_cabecalhos(ws, max_col, mescladas)
 
-    lancamentos: list[dict] = []
-    lotacao_atual: str | None = None
-
-    if cabecalho is None:
+    if linha_cab is None:
         wb.close()
         return {
-            "competencia": competencia,
-            "aba": ws.title,
-            "lotacoes": [],
-            "lancamentos": [],
-            "cabecalho": None,
+            "competencia": competencia, "aba": ws.title, "lotacoes": [],
+            "lancamentos": [], "faixas": {}, "total_relatorio": None,
         }
 
-    for numero_linha, row in enumerate(ws.iter_rows(values_only=True), start=1):
-        texto_a = _texto(row[0]) if row else ""
+    faixa_desc = faixas["descricao"]
+    lancamentos: list[dict] = []
+    lotacao_atual: str | None = None
+    em_resumo = False
+    total_relatorio: Decimal | None = None
 
-        if _eh_linha_lotacao(texto_a):
-            lotacao_atual = texto_a
+    for r in range(1, ws.max_row + 1):
+        segs = _segmentos_da_linha(ws, r, max_col, mescladas)
+        if not segs:
             continue
 
-        if not linha_eh_lancamento(row, cabecalho):
+        seg_desc = _melhor_sobreposicao(segs, faixa_desc)
+        seg_folha = _melhor_sobreposicao(segs, faixas.get("folha"))
+
+        # Linha NAO tabular (banner / lotacao / evento / rodape / resumo):
+        # nao ha descricao, OU o MESMO segmento mesclado cobre Descricao e Folha
+        # (mesclagem larga de titulo), OU o segmento comeca na coluna A.
+        nao_tabular = (
+            seg_desc is None
+            or seg_desc[0] <= 1
+            or (seg_folha is not None and seg_folha[:2] == seg_desc[:2])
+        )
+        if nao_tabular:
+            texto = _texto(seg_desc[2]) if seg_desc else _texto(segs[0][2])
+            if _RE_LOTACAO.match(texto):
+                lotacao_atual = texto
+            elif normalizar_texto(texto).startswith("RESUMO"):
+                em_resumo = True
+            # banners, evento, emitido, pagina -> ignorados
             continue
 
-        folha_bruta = _texto(_celula(row, cabecalho.get("folha")))
+        if em_resumo:
+            continue
+
+        # --- linha tabular: candidata a lancamento ---
+        descricao = _texto(seg_desc[2])
+        norm_desc = normalizar_texto(descricao)
+        if not descricao or norm_desc in _DESC_RUIDO or _eh_numero(descricao):
+            continue
+
+        folha_bruta = _texto(seg_folha[2]) if seg_folha else ""
+        if not folha_bruta:  # sem folha nao e lancamento valido
+            continue
+
         info_folha = normalizar_folha(folha_bruta)
-        descricao = _texto(_celula(row, cabecalho.get("descricao")))
-
         registro = {
             "lotacao_original": lotacao_atual or "",
             "setor_destino": None,
-            "matricula": _texto(_celula(row, cabecalho.get("matricula"))),
-            "funcionario": _texto(_celula(row, cabecalho.get("funcionario"))),
-            "cpf": _texto(_celula(row, cabecalho.get("cpf"))),
-            "folha": folha_bruta or "MENSAL",
+            "matricula": _texto(_valor_campo(segs, faixas.get("matricula"))),
+            "funcionario": _texto(_valor_campo(segs, faixas.get("funcionario"))),
+            "cpf": _texto(_valor_campo(segs, faixas.get("cpf"))),
+            "folha": folha_bruta,
             "tipo_destino": info_folha["tipo_destino"],
             "folha_reconhecida": info_folha["reconhecida"],
             "observacao": info_folha["observacao"],
             "descricao_original": descricao,
             "rubrica_destino": None,
-            "base_calculo": limpar_valor(_celula(row, cabecalho.get("base_calculo"))),
-            "referencia": limpar_valor(_celula(row, cabecalho.get("referencia"))),
-            "valor": limpar_valor(_celula(row, cabecalho.get("valor"))),
-            "linha_origem": numero_linha,
+            "coluna_destino": None,
+            "base_calculo": limpar_valor(_valor_campo(segs, faixas.get("base_calculo"))),
+            "referencia": limpar_valor(_valor_campo(segs, faixas.get("referencia"))),
+            "valor": limpar_valor(_valor_campo(segs, faixas.get("valor"))),
+            "linha_origem": r,
         }
         lancamentos.append(registro)
 
     wb.close()
 
-    lotacoes = []
+    lotacoes: list[str] = []
     for reg in lancamentos:
-        if reg["lotacao_original"] and reg["lotacao_original"] not in lotacoes:
-            lotacoes.append(reg["lotacao_original"])
+        lot = reg["lotacao_original"]
+        if lot and lot not in lotacoes:
+            lotacoes.append(lot)
 
     return {
         "competencia": competencia,
         "aba": ws.title,
         "lotacoes": lotacoes,
         "lancamentos": lancamentos,
-        "cabecalho": cabecalho,
+        "faixas": faixas,
+        "total_relatorio": total_relatorio,
     }
+
+
+def _valor_campo(segs: list, faixa: tuple | None):
+    """Valor do campo cuja faixa de colunas e 'faixa', por maior sobreposicao."""
+    seg = _melhor_sobreposicao(segs, faixa) if faixa else None
+    return seg[2] if seg else None

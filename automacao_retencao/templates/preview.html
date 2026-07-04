@@ -10,40 +10,32 @@
     <h1 class="hero" style="font-size: clamp(1.6rem, 3vw, 2.2rem);">O que o sistema identificou</h1>
   </div>
   <a href="{{ url_for('mapeamento', sid=sid) }}" class="btn btn-primary btn-lg">
-    Continuar para preenchimento <i class="bi bi-arrow-right ms-2"></i>
+    Continuar para mapeamento <i class="bi bi-arrow-right ms-2"></i>
   </a>
 </div>
 
 <div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
-    <div class="stat"><div class="k">Competência</div><div class="v">{{ competencia or '—' }}</div></div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="stat"><div class="k">Lançamentos</div><div class="v mono">{{ qtd_lancamentos }}</div></div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="stat"><div class="k">Lotações</div><div class="v mono">{{ qtd_lotacoes }}</div></div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="stat"><div class="k">Rubricas</div><div class="v mono">{{ rubricas|length }}</div></div>
-  </div>
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Competência</div><div class="v">{{ competencia or '—' }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Lançamentos</div><div class="v mono">{{ qtd_lancamentos }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Lotações</div><div class="v mono">{{ qtd_lotacoes }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Rubricas p/ preencher</div><div class="v mono">{{ rubricas|length }}</div></div></div>
 </div>
 
-{% if lotacoes_nao_mapeadas or rubricas_nao_mapeadas or folhas_desconhecidas %}
+{% if lotacoes_nao_mapeadas or rubricas_sem_vinculo or folhas_desconhecidas %}
 <div class="alert-soft-danger p-3 mb-4">
-  <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>Atenção: itens não mapeados</div>
+  <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>Precisam de decisão no próximo passo</div>
   <div class="small">
-    {% if lotacoes_nao_mapeadas %}<span class="me-3">Lotações: <strong>{{ lotacoes_nao_mapeadas|length }}</strong></span>{% endif %}
-    {% if rubricas_nao_mapeadas %}<span class="me-3">Rubricas: <strong>{{ rubricas_nao_mapeadas|length }}</strong></span>{% endif %}
-    {% if folhas_desconhecidas %}<span>Tipos de folha: <strong>{{ folhas_desconhecidas|length }}</strong></span>{% endif %}
-    — resolva no próximo passo. Itens não mapeados <strong>não são preenchidos</strong>.
+    {% if lotacoes_nao_mapeadas %}<span class="me-3">Lotações não mapeadas: <strong>{{ lotacoes_nao_mapeadas|length }}</strong></span>{% endif %}
+    {% if rubricas_sem_vinculo %}<span class="me-3">Rubricas sem vínculo: <strong>{{ rubricas_sem_vinculo|length }}</strong></span>{% endif %}
+    {% if folhas_desconhecidas %}<span>Folhas desconhecidas: <strong>{{ folhas_desconhecidas|length }}</strong></span>{% endif %}
+    — itens sem vínculo <strong>não são preenchidos</strong>.
   </div>
 </div>
 {% endif %}
 
 <div class="row g-4">
   <div class="col-lg-7">
-    <div class="section-title mb-2">Lotações detectadas → setor sugerido</div>
+    <div class="section-title mb-2">Lotações → setor sugerido</div>
     <div class="table-wrap">
       <div class="table-responsive">
         <table class="table align-middle">
@@ -67,28 +59,32 @@
   </div>
 
   <div class="col-lg-5">
-    <div class="section-title mb-2">Rubricas identificadas</div>
+    <div class="section-title mb-2">Rubricas que vão preencher</div>
     <div class="panel mb-4">
       {% if rubricas %}
-        <div class="d-flex flex-wrap gap-2">
-          {% for r in rubricas %}<span class="chip ok">{{ r }}</span>{% endfor %}
-        </div>
+        <div class="d-flex flex-wrap gap-2">{% for r in rubricas %}<span class="chip ok">{{ r }}</span>{% endfor %}</div>
       {% else %}<span class="text-secondary">Nenhuma rubrica reconhecida.</span>{% endif %}
     </div>
 
-    {% if rubricas_nao_mapeadas %}
-    <div class="section-title mb-2">Rubricas não mapeadas</div>
-    <div class="panel">
+    {% if rubricas_sem_vinculo %}
+    <div class="section-title mb-2 text-danger">Sem vínculo (decidir no mapeamento)</div>
+    <div class="panel mb-4">
       <div class="d-grid gap-2">
-        {% for desc, qtd in rubricas_nao_mapeadas.items() %}
-        <div class="d-flex justify-content-between align-items-center small">
-          <span class="text-truncate me-2">{{ desc }}</span>
-          <span class="chip danger">{{ qtd }}×</span>
-        </div>
+        {% for desc, qtd in rubricas_sem_vinculo.items() %}
+        <div class="d-flex justify-content-between align-items-center small"><span class="text-truncate me-2">{{ desc }}</span><span class="chip danger">{{ qtd }}×</span></div>
         {% endfor %}
       </div>
+    </div>
+    {% endif %}
+
+    {% if rubricas_fora_escopo %}
+    <div class="section-title mb-2">Fora de escopo (ignoradas)</div>
+    <div class="panel">
+      <div class="d-flex flex-wrap gap-2">
+        {% for desc, qtd in rubricas_fora_escopo.items() %}<span class="chip">{{ desc }} · {{ qtd }}×</span>{% endfor %}
+      </div>
       <hr class="soft my-3">
-      <div class="small text-secondary">Estas descrições não têm rubrica correspondente e ficarão pendentes.</div>
+      <div class="small text-secondary">Não são retenções para credor (INSS, faltas, pensão). Não preenchem — por decisão, não por erro.</div>
     </div>
     {% endif %}
   </div>
@@ -96,7 +92,7 @@
 
 <div class="mt-4">
   <a href="{{ url_for('mapeamento', sid=sid) }}" class="btn btn-primary btn-lg">
-    Continuar para preenchimento <i class="bi bi-arrow-right ms-2"></i>
+    Continuar para mapeamento <i class="bi bi-arrow-right ms-2"></i>
   </a>
 </div>
 {% endblock %}

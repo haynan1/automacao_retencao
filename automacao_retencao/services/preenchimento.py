@@ -74,11 +74,28 @@ def localizar_colunas_rubricas(ws: Worksheet, linha_cabecalho: int) -> dict:
         valor = ws.cell(row=linha_cabecalho, column=col).value
         rotulo = "" if valor is None else str(valor).strip()
         norm = normalizar_texto(rotulo)
-        if not norm or norm == "TIPO":
+        # Ignora a coluna 'Tipo' e colunas de total (ex.: 'TOTAL DO EVENTO'),
+        # que nao sao rubricas e nunca devem receber lancamento.
+        if not norm or norm == "TIPO" or norm.startswith("TOTAL"):
             continue
         # Se a mesma rubrica aparecer duas vezes, mantem a primeira ocorrencia.
         colunas.setdefault(norm, {"coluna": col, "rotulo": rotulo})
     return colunas
+
+
+def listar_colunas_modelo(ws: Worksheet) -> list[str]:
+    """Lista, na ordem das colunas, os rotulos de rubrica do modelo.
+
+    As colunas sao identicas em todos os blocos; usamos o bloco com mais
+    colunas como referencia. Esta lista e a FONTE DA VERDADE para o vinculo
+    rubrica -> coluna (nunca se escreve numa coluna que nao exista).
+    """
+    blocos = localizar_blocos_setores(ws)
+    if not blocos:
+        return []
+    ref = max(blocos, key=lambda b: len(b["colunas"]))
+    itens = sorted(ref["colunas"].values(), key=lambda x: x["coluna"])
+    return [i["rotulo"] for i in itens]
 
 
 def localizar_blocos_setores(ws: Worksheet) -> list[dict]:

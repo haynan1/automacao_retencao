@@ -56,13 +56,20 @@ def normalizar_folha(folha: str) -> dict:
         return {"tipo_destino": "Mensal", "reconhecida": True, "observacao": ""}
 
     if "FERIAS" in norm:
-        return {"tipo_destino": "Mensal", "reconhecida": True, "observacao": "Origem: FÉRIAS"}
+        return {"tipo_destino": "Mensal", "reconhecida": True, "observacao": ""}
 
     if "RESCISAO" in norm:
         return {
             "tipo_destino": "Mensal",
             "reconhecida": True,
             "observacao": "Origem: RESCISÃO — conferir manualmente",
+        }
+
+    if "COMPLEMENTAR" in norm:
+        return {
+            "tipo_destino": "Mensal",
+            "reconhecida": True,
+            "observacao": "Origem: COMPLEMENTAR — conferir manualmente",
         }
 
     return {
