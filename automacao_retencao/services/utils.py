@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 import uuid
 from datetime import datetime
 from decimal import Decimal
@@ -36,6 +37,37 @@ def criar_pastas() -> None:
     """Garante que todas as pastas de trabalho existam."""
     for pasta in (UPLOADS_DIR, OUTPUTS_DIR, LOGS_DIR, CONFIG_DIR, MODELOS_DIR, SESSIONS_DIR):
         pasta.mkdir(parents=True, exist_ok=True)
+
+
+def _limpar_antigos(pasta: Path, max_horas: float, manter: set[str] = frozenset({".gitkeep"})) -> int:
+    """Remove arquivos da pasta com mais de 'max_horas'. Retorna quantos removeu."""
+    if not pasta.exists():
+        return 0
+    limite = time.time() - max_horas * 3600
+    removidos = 0
+    for arq in pasta.iterdir():
+        if not arq.is_file() or arq.name in manter:
+            continue
+        try:
+            if arq.stat().st_mtime < limite:
+                arq.unlink()
+                removidos += 1
+        except OSError:
+            continue  # arquivo em uso/inacessível — ignora nesta passada
+    return removidos
+
+
+def limpar_temporarios(uploads_horas: float = 24, sessoes_horas: float = 24,
+                       outputs_horas: float = 24 * 7) -> None:
+    """Faz uma limpeza de retenção: uploads (PII) e sessões em 24h, saídas em 7 dias.
+
+    Idempotente e tolerante a falhas — pensada para rodar no startup do app.
+    """
+    n = (_limpar_antigos(UPLOADS_DIR, uploads_horas)
+         + _limpar_antigos(SESSIONS_DIR, sessoes_horas)
+         + _limpar_antigos(OUTPUTS_DIR, outputs_horas))
+    if n:
+        configurar_logs().info("Limpeza de temporários: %d arquivo(s) removido(s).", n)
 
 
 def configurar_logs() -> logging.Logger:

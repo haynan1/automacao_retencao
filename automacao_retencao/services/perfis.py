@@ -17,6 +17,7 @@ Layout em disco:
 from __future__ import annotations
 
 import json
+import logging
 import re
 import shutil
 from datetime import datetime
@@ -24,6 +25,8 @@ from pathlib import Path
 
 from .normalizador import normalizar_texto
 from .utils import CONFIG_DIR, MODELOS_DIR, criar_pastas
+
+log = logging.getLogger("automacao_retencao")
 
 PERFIS_CONFIG_DIR = CONFIG_DIR / "perfis"
 PERFIS_MODELOS_DIR = MODELOS_DIR / "perfis"
@@ -52,8 +55,8 @@ def _ler_registro() -> dict:
             dados.setdefault("perfis", [])
             dados.setdefault("padrao", dados["perfis"][0]["slug"] if dados["perfis"] else "saude")
             return dados
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError, KeyError, IndexError) as exc:
+            log.warning("perfis.json inválido (%s) — usando registro padrão.", exc)
     return {k: (v[:] if isinstance(v, list) else v) for k, v in _REGISTRO_PADRAO.items()}
 
 
@@ -168,14 +171,26 @@ def info_molde(slug: str) -> dict | None:
         try:
             with meta.open("r", encoding="utf-8") as fh:
                 return json.load(fh)
-        except Exception:
-            pass
+        except (OSError, json.JSONDecodeError) as exc:
+            log.warning("Metadados do molde do perfil '%s' inválidos: %s", slug, exc)
     return {"nome_original": "molde_padrao.xlsx", "definido_em": None}
 
 
 def definir_molde(slug: str, origem: str | Path, nome_original: str) -> None:
-    """Fixa um .xlsx (ja validado) como molde padrao do perfil."""
-    shutil.copyfile(origem, caminho_molde(slug))
+    """Fixa um .xlsx (ja validado) como molde padrao do perfil.
+
+    Se ja existir um molde fixo, guarda um backup timestampado antes de
+    sobrescrever (evita perder o molde anterior por engano).
+    """
+    destino = caminho_molde(slug)
+    if destino.exists():
+        carimbo = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup = destino.with_name(f"molde_padrao.{carimbo}.bak.xlsx")
+        try:
+            shutil.copyfile(destino, backup)
+        except OSError as exc:
+            log.warning("Não foi possível fazer backup do molde do perfil '%s': %s", slug, exc)
+    shutil.copyfile(origem, destino)
     meta = {
         "nome_original": nome_original or "molde_padrao.xlsx",
         "definido_em": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),

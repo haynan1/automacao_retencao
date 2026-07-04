@@ -40,6 +40,7 @@ from services.utils import (
     configurar_logs,
     criar_pastas,
     gerar_nome_saida,
+    limpar_temporarios,
     novo_id_sessao,
     salvar_sessao,
 )
@@ -53,6 +54,7 @@ app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
 criar_pastas()
 log = configurar_logs()
+limpar_temporarios()  # retenção: remove uploads/sessões >24h e saídas >7d
 
 
 # ---------------------------------------------------------------------------
@@ -530,4 +532,7 @@ def _moeda(valor) -> str:
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=5000, debug=True)
+    # Debug desligado por padrão (o debugger do Werkzeug expõe tracebacks e
+    # execução de código). Para desenvolvimento: FLASK_DEBUG=1 python app.py
+    debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
+    app.run(host="127.0.0.1", port=5000, debug=debug)

@@ -40,6 +40,17 @@ python app.py
 
 Acesse: **http://127.0.0.1:5000**
 
+O servidor sobe em `127.0.0.1` com **debug desligado**. Para desenvolvimento (auto-reload
+e tracebacks), use `FLASK_DEBUG=1 python app.py`. Não exponha o app para fora do localhost
+com debug ligado.
+
+### Testes
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
 ## 3. Como usar
 
 1. **Exporte** a *Listagem de Eventos* do sistema em **XLSX** (não PDF).
@@ -125,6 +136,24 @@ automacao_retencao/
 - **Mapeamentos em JSON**: manutenção sem tocar no código.
 - **Segurança**: `secure_filename`, limite de 30 MB, apenas `.xlsx`, uploads e
   saídas restritos às suas pastas, sem execução de macros.
+
+### Secretarias (perfis)
+
+Cada secretaria é um **perfil** com molde fixo e vínculos aprendidos isolados. O registro
+fica em `config/perfis.json`:
+
+```json
+{ "slug": "saude", "nome": "Secretaria da Saúde (FMS)", "deteccao": ["FUNDO MUNICIPAL DE SAUDE", "FMS"] }
+```
+
+- **`slug`** — id interno (nome da pasta de dados). Não altere depois de criado.
+- **`nome`** — texto exibido no seletor. Edite à vontade.
+- **`deteccao`** — termos que auto-sugerem a secretaria pelo cabeçalho da Listagem.
+
+Para **adicionar** uma secretaria: crie a entrada no JSON (ou use
+`services.perfis.registrar_perfil(nome, deteccao, slug)`) e defina o molde fixo dela pela
+tela inicial (marcando “Definir como molde fixo”). Os dados ficam em
+`config/perfis/<slug>/` e `modelos/perfis/<slug>/`.
 
 ### Conferência
 

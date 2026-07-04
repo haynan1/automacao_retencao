@@ -37,3 +37,6 @@ desktop.ini
 
 # ==== Dados de teste ====
 arquivos_base_temp
+
+# ==== Backups de molde gerados em runtime ====
+*.bak.xlsx
