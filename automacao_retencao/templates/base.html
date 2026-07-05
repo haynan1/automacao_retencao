@@ -67,6 +67,28 @@
     </div>
   </footer>
 
+  <div class="modal fade" id="modal-confirmacao-global" tabindex="-1" aria-labelledby="confirmacao-global-titulo" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content app-modal">
+        <div class="modal-header app-modal-header">
+          <h2 class="modal-title section-title" id="confirmacao-global-titulo">Confirmar ação</h2>
+          <button type="button" class="btn btn-sm btn-outline-light" data-bs-dismiss="modal" title="Fechar" aria-label="Fechar">
+            <i class="bi bi-x-lg"></i>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="mb-0" id="confirmacao-global-mensagem"></p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-light" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" class="btn btn-danger-soft" id="btn-confirmacao-global">
+            <i class="bi bi-check2-circle me-2"></i>Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script
     src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
     integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
@@ -86,6 +108,37 @@
       btn.addEventListener('click', function () {
         var cur = document.documentElement.getAttribute('data-bs-theme') || 'dark';
         aplica(cur === 'dark' ? 'light' : 'dark');
+      });
+    })();
+
+    // Confirmacoes destrutivas no visual do sistema.
+    (function () {
+      var modalEl = document.getElementById('modal-confirmacao-global');
+      var msgEl = document.getElementById('confirmacao-global-mensagem');
+      var btn = document.getElementById('btn-confirmacao-global');
+      if (!modalEl || !msgEl || !btn || typeof bootstrap === 'undefined') return;
+      var modal = new bootstrap.Modal(modalEl);
+      var formPendente = null;
+
+      document.querySelectorAll('form[data-confirm-message]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+          event.preventDefault();
+          formPendente = form;
+          msgEl.textContent = form.getAttribute('data-confirm-message') || 'Confirmar esta acao?';
+          modal.show();
+        });
+      });
+
+      btn.addEventListener('click', function () {
+        if (!formPendente) return;
+        var form = formPendente;
+        formPendente = null;
+        modal.hide();
+        HTMLFormElement.prototype.submit.call(form);
+      });
+
+      modalEl.addEventListener('hidden.bs.modal', function () {
+        formPendente = null;
       });
     })();
   </script>

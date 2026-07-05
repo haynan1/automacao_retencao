@@ -24,6 +24,7 @@ except ImportError:
 from flask import (
     Flask,
     abort,
+    jsonify,
     redirect,
     render_template,
     request,
@@ -558,8 +559,14 @@ def processar(sid):
         # --- Histórico local (nunca vai para o git) ---
         pendente = (rec["total_sem_vinculo"] + rec["total_setor_nao_mapeado"]
                     + rec["total_folha_desconhecida"])
+        graficos_hist = {}
+        for gnome, gchave in (("Setor", "por_setor"), ("Rubrica", "por_coluna"), ("Tipo", "por_tipo")):
+            gserie = _serie_grafico(agregados_tot.get(gchave))
+            if gserie:
+                graficos_hist[gnome] = gserie
         historico.registrar_operacao({
             "sid": sid,
+            "graficos": graficos_hist,
             "perfil": perfil,
             "perfil_nome": dados.get("perfil_nome"),
             "competencia": dados["competencia"],
@@ -600,18 +607,15 @@ def processar(sid):
         ), 500
 
 
-def _dados_grafico(d: dict | None) -> list[dict]:
-    """Transforma {rótulo: Decimal} em barras {label, valor, pct}, ordenadas
-    por valor (desc). pct = proporção ao maior valor (para largura da barra)."""
+def _serie_grafico(d: dict | None) -> list[dict]:
+    """Transforma {rótulo: Decimal} em série [{label, valor(float)}], ordenada
+    por valor (desc). float para serializar em JSON no gráfico SVG."""
     if not d:
         return []
-    maximo = max(d.values())
-    itens = sorted(d.items(), key=lambda kv: kv[1], reverse=True)
-    barras = []
-    for label, valor in itens:
-        pct = float(valor / maximo * 100) if maximo and maximo != 0 else 0.0
-        barras.append({"label": label, "valor": valor, "pct": max(0.0, min(100.0, round(pct, 2)))})
-    return barras
+    return [
+        {"label": k, "valor": float(v)}
+        for k, v in sorted(d.items(), key=lambda kv: kv[1], reverse=True)
+    ]
 
 
 @app.route("/resultado/<sid>")
@@ -620,15 +624,18 @@ def resultado(sid):
     if "resumo" not in dados:
         return redirect(url_for("mapeamento", sid=sid))
     resumo = dados["resumo"]
+    graficos = {}
+    for nome, chave in (("Setor", "por_setor"), ("Rubrica", "por_coluna"), ("Tipo", "por_tipo")):
+        serie = _serie_grafico(resumo.get(chave))
+        if serie:
+            graficos[nome] = serie
     return render_template(
         "resultado.html",
         sid=sid,
         competencia=dados["competencia"],
         output_nome=dados["output_nome"],
         resumo=resumo,
-        grafico_setor=_dados_grafico(resumo.get("por_setor")),
-        grafico_coluna=_dados_grafico(resumo.get("por_coluna")),
-        grafico_tipo=_dados_grafico(resumo.get("por_tipo")),
+        graficos=graficos,
     )
 
 
@@ -664,6 +671,14 @@ def guia():
 def historico_remover(op_id):
     historico.remover_operacao(op_id)
     return redirect(url_for("historico_view"))
+
+
+@app.route("/historico/<op_id>/graficos")
+def historico_graficos(op_id):
+    op = historico.buscar_operacao(op_id)
+    if not op:
+        abort(404)
+    return jsonify(op.get("graficos") or {})
 
 
 @app.route("/historico/limpar", methods=["POST"])

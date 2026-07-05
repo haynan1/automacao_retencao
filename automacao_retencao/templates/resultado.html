@@ -4,22 +4,6 @@
 {% block steps %}{{ stepper(4) }}{% endblock %}
 
 {% set rec = resumo.reconciliacao %}
-
-{% macro barras(dados) %}
-{% if dados %}
-<div class="chart-cap mt-3 mb-2"><i class="bi bi-bar-chart-line me-1"></i>Gráfico</div>
-<div class="bars">
-  {% for d in dados %}
-  <div class="bar-row" title="{{ d.label }} — {{ d.valor|moeda }}">
-    <span class="bar-label" title="{{ d.label }}">{{ d.label }}</span>
-    <span class="bar-track"><span class="bar-fill" style="width: {{ d.pct }}%"></span></span>
-    <span class="bar-val mono">{{ d.valor|moeda }}</span>
-  </div>
-  {% endfor %}
-</div>
-{% endif %}
-{% endmacro %}
-
 {% block content %}
 <div class="alert-soft-success p-4 mb-4 d-flex flex-wrap align-items-center justify-content-between gap-3">
   <div>
@@ -62,7 +46,6 @@
         </table>
       </div>
     </div>
-    {{ barras(grafico_setor) }}
     <div class="section-title mt-4 mb-2">Total por tipo</div>
     <div class="panel">
       <div class="d-flex flex-wrap gap-3">
@@ -70,7 +53,6 @@
         <div class="stat flex-grow-1"><div class="k">{{ tipo }}</div><div class="v small mono">{{ valor|moeda }}</div></div>
         {% else %}<span class="text-secondary">—</span>{% endfor %}
       </div>
-      {{ barras(grafico_tipo) }}
     </div>
   </div>
 
@@ -87,9 +69,19 @@
         </table>
       </div>
     </div>
-    {{ barras(grafico_coluna) }}
   </div>
 </div>
+
+{% if graficos %}
+<div class="panel-pad panel mt-4" id="viz">
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <div class="section-title mb-0"><i class="bi bi-bar-chart-line me-1"></i>Visualização dos valores preenchidos</div>
+    <div class="viz-seg" id="viz-seg"></div>
+  </div>
+  <div class="viz-host" id="viz-host"></div>
+</div>
+<div class="viz-tip" id="viz-tip"></div>
+{% endif %}
 
 {% set tem_pend = resumo.lotacoes_nao_mapeadas or resumo.rubricas_sem_vinculo or resumo.folhas_desconhecidas or resumo.pendencias_estrutura %}
 {% if tem_pend %}
@@ -129,4 +121,18 @@
   <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-arrow-repeat me-2"></i>Novo processamento</a>
 </div>
 <p class="text-secondary small mt-3"><i class="bi bi-info-circle me-1"></i>Abra o arquivo no Excel para as fórmulas e o dashboard recalcularem automaticamente.</p>
+{% endblock %}
+
+{% block scripts %}
+{% if graficos %}
+<script src="{{ url_for('static', filename='chart.js') }}"></script>
+<script>
+  VizChart.mount({
+    host: document.getElementById('viz-host'),
+    seg: document.getElementById('viz-seg'),
+    tip: document.getElementById('viz-tip'),
+    data: {{ graficos|tojson }},
+  });
+</script>
+{% endif %}
 {% endblock %}

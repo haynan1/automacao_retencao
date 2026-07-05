@@ -124,6 +124,26 @@ def limpar_historico() -> int:
     return total
 
 
+def buscar_operacao(op_id: str) -> dict | None:
+    """Retorna a operação com o id informado, ou None."""
+    if not op_id or not _ARQ.exists():
+        return None
+    try:
+        for linha in _ARQ.read_text(encoding="utf-8").splitlines():
+            linha = linha.strip()
+            if not linha:
+                continue
+            try:
+                op = json.loads(linha)
+            except json.JSONDecodeError:
+                continue
+            if op.get("id") == op_id:
+                return op
+    except OSError as exc:
+        log.warning("Não foi possível ler o histórico para buscar: %s", exc)
+    return None
+
+
 def total_operacoes() -> int:
     if not _ARQ.exists():
         return 0
