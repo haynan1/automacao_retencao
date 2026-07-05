@@ -42,7 +42,8 @@ def registrar_operacao(entry: dict) -> None:
         with _ARQ.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
         _trim()
-    except OSError as exc:
+    except (OSError, TypeError, ValueError) as exc:
+        # Best-effort: o histórico nunca deve quebrar o processamento.
         log.warning("Não foi possível gravar o histórico: %s", exc)
 
 
