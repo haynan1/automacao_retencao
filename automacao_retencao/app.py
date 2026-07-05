@@ -637,6 +637,19 @@ def historico_view():
     return render_template("historico.html", operacoes=operacoes)
 
 
+@app.route("/historico/<op_id>/remover", methods=["POST"])
+def historico_remover(op_id):
+    historico.remover_operacao(op_id)
+    return redirect(url_for("historico_view"))
+
+
+@app.route("/historico/limpar", methods=["POST"])
+def historico_limpar():
+    n = historico.limpar_historico()
+    log.info("Histórico limpo: %d operação(ões) removida(s).", n)
+    return redirect(url_for("historico_view"))
+
+
 @app.route("/historico/baixar/<nome>")
 def historico_baixar(nome):
     seguro = secure_filename(nome)

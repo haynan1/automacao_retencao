@@ -47,6 +47,28 @@ def test_trim_limita_tamanho(hist_tmp, monkeypatch):
     assert ns == [11, 10, 9, 8, 7]
 
 
+def test_remover_operacao_por_id(hist_tmp):
+    for i in range(3):
+        historico.registrar_operacao({"competencia": f"0{i+1}/2026"})
+    ops = historico.listar_operacoes()
+    alvo = ops[1]["id"]                      # remove o do meio
+    assert historico.remover_operacao(alvo) is True
+    restantes = historico.listar_operacoes()
+    assert len(restantes) == 2
+    assert alvo not in {o["id"] for o in restantes}
+    # id inexistente não remove nada
+    assert historico.remover_operacao("naoexiste") is False
+    assert historico.total_operacoes() == 2
+
+
+def test_limpar_historico(hist_tmp):
+    for i in range(4):
+        historico.registrar_operacao({"n": i})
+    assert historico.limpar_historico() == 4
+    assert historico.listar_operacoes() == []
+    assert historico.limpar_historico() == 0   # já vazio
+
+
 def test_linha_corrompida_e_ignorada(hist_tmp):
     historico.registrar_operacao({"ok": 1})
     historico._ARQ.open("a", encoding="utf-8").write("{lixo não-json}\n")

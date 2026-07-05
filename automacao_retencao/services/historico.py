@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import datetime
 from decimal import Decimal
 
@@ -38,6 +39,7 @@ def registrar_operacao(entry: dict) -> None:
     try:
         criar_pastas()
         registro = _serializavel(dict(entry))
+        registro.setdefault("id", uuid.uuid4().hex)  # id estável para remoção
         registro.setdefault("datahora", datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
         with _ARQ.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(registro, ensure_ascii=False) + "\n")
@@ -75,6 +77,51 @@ def listar_operacoes(limite: int = 200) -> list[dict]:
         log.warning("Não foi possível ler o histórico: %s", exc)
         return []
     return list(reversed(entradas))[:limite]
+
+
+def remover_operacao(op_id: str) -> bool:
+    """Remove uma operação do histórico pelo id. Retorna True se removeu."""
+    if not op_id or not _ARQ.exists():
+        return False
+    try:
+        linhas = _ARQ.read_text(encoding="utf-8").splitlines()
+    except OSError as exc:
+        log.warning("Não foi possível ler o histórico para remover: %s", exc)
+        return False
+
+    mantidas, removeu = [], False
+    for linha in linhas:
+        if not linha.strip():
+            continue
+        try:
+            if json.loads(linha).get("id") == op_id:
+                removeu = True
+                continue
+        except json.JSONDecodeError:
+            continue  # descarta linha corrompida junto
+        mantidas.append(linha)
+
+    if not removeu:
+        return False
+    try:
+        conteudo = ("\n".join(mantidas) + "\n") if mantidas else ""
+        _ARQ.write_text(conteudo, encoding="utf-8")
+    except OSError as exc:
+        log.warning("Não foi possível gravar o histórico após remoção: %s", exc)
+        return False
+    return True
+
+
+def limpar_historico() -> int:
+    """Apaga todo o histórico. Retorna quantas operações foram removidas."""
+    total = total_operacoes()
+    try:
+        if _ARQ.exists():
+            _ARQ.unlink()
+    except OSError as exc:
+        log.warning("Não foi possível limpar o histórico: %s", exc)
+        return 0
+    return total
 
 
 def total_operacoes() -> int:
