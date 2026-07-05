@@ -440,3 +440,87 @@ html[data-bs-theme="light"] .secretaria-block {
     width: 100%;
   }
 }
+
+/* ===================== Guia / Como funciona ===================== */
+
+/* Revelação suave ao rolar */
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
+.reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } }
+
+.eyebrow-line { display: inline-flex; align-items: center; gap: .6rem; }
+.eyebrow-line::before { content: ""; width: 26px; height: 2px; background: var(--accent); border-radius: 2px; }
+
+/* Números-destaque com count-up */
+.metric { text-align: center; }
+.metric .n { font-size: clamp(1.9rem, 4vw, 2.6rem); font-weight: 750; line-height: 1; letter-spacing: -0.02em;
+  background: linear-gradient(120deg, var(--accent), #7c5cff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.metric .cap { color: var(--muted); font-size: .82rem; margin-top: .4rem; }
+
+/* Fluxo interativo */
+.flow { display: flex; gap: .4rem; flex-wrap: wrap; }
+.flow-node {
+  flex: 1 1 0; min-width: 130px; text-align: left; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  padding: .9rem 1rem; transition: border-color .2s ease, transform .2s ease, background .2s ease;
+  position: relative;
+}
+.flow-node:hover { transform: translateY(-2px); border-color: var(--accent); }
+.flow-node.active { border-color: var(--accent); background: var(--accent-soft); }
+.flow-node .idx {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  font-size: .78rem; font-weight: 700; color: #fff; background: linear-gradient(140deg, var(--accent), #7c5cff);
+  margin-bottom: .5rem;
+}
+.flow-node .t { font-weight: 650; font-size: .95rem; }
+.flow-node .s { color: var(--muted); font-size: .78rem; margin-top: .15rem; }
+.flow-detail { border-left: 2px solid var(--accent); padding: .25rem 0 .25rem 1.1rem; }
+.flow-detail h4 { font-size: 1.05rem; font-weight: 700; margin-bottom: .35rem; }
+.flow-panel { display: none; }
+.flow-panel.active { display: block; animation: fadein .35s ease; }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Passo a passo numerado */
+.guide-step { display: flex; gap: 1rem; align-items: flex-start; }
+.guide-step .num {
+  flex: 0 0 auto; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  font-weight: 750; color: var(--accent); background: var(--accent-soft); border: 1px solid var(--border);
+}
+.guide-step h4 { font-size: 1rem; font-weight: 650; margin-bottom: .2rem; }
+.guide-step p { color: var(--muted); margin: 0; font-size: .92rem; }
+
+/* Barra de reconciliação (ilustrativa) */
+.recon-track { display: flex; height: 40px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); }
+.recon-seg { width: 0; transition: width 1s cubic-bezier(.2,.7,.2,1); display: flex; align-items: center; justify-content: center;
+  color: #05121f; font-weight: 700; font-size: .8rem; white-space: nowrap; }
+.recon-seg.a { background: linear-gradient(180deg, #4ade80, #22c55e); }
+.recon-seg.b { background: linear-gradient(180deg, #94a3b8, #64748b); color: #fff; }
+.recon-seg.c { background: linear-gradient(180deg, #fca5a5, #f87171); color: #3b0a0a; }
+.recon-legend { display: flex; gap: 1.2rem; flex-wrap: wrap; margin-top: .8rem; font-size: .85rem; color: var(--muted); }
+.recon-legend .dot { width: 11px; height: 11px; border-radius: 3px; display: inline-block; margin-right: .4rem; vertical-align: middle; }
+
+/* Conceito */
+.concept { height: 100%; }
+.concept .ico {
+  width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; font-size: 1.25rem;
+  background: var(--accent-soft); color: var(--accent); margin-bottom: .8rem;
+}
+.concept h4 { font-size: 1rem; font-weight: 650; margin-bottom: .35rem; }
+.concept p { color: var(--muted); font-size: .9rem; margin: 0; }
+
+/* FAQ (Bootstrap accordion tematizado) */
+.accordion { --bs-accordion-bg: transparent; --bs-accordion-color: var(--text);
+  --bs-accordion-border-color: var(--border); --bs-accordion-btn-color: var(--text);
+  --bs-accordion-active-bg: var(--accent-soft); --bs-accordion-active-color: var(--text);
+  --bs-accordion-btn-focus-box-shadow: 0 0 0 .2rem var(--accent-soft);
+  --bs-accordion-border-radius: 14px; --bs-accordion-inner-border-radius: 14px;
+}
+.accordion-item { background: var(--surface); border: 1px solid var(--border); border-radius: 14px !important; margin-bottom: .6rem; overflow: hidden; }
+.accordion-button { background: var(--surface); font-weight: 600; }
+.accordion-button:not(.collapsed) { box-shadow: none; }
+.accordion-body { color: var(--muted); }
+
+.guide-cta {
+  background: linear-gradient(140deg, rgba(79,140,255,.14), rgba(124,92,255,.10));
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem;
+}

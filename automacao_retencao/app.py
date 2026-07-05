@@ -637,6 +637,11 @@ def historico_view():
     return render_template("historico.html", operacoes=operacoes)
 
 
+@app.route("/guia")
+def guia():
+    return render_template("guia.html")
+
+
 @app.route("/historico/<op_id>/remover", methods=["POST"])
 def historico_remover(op_id):
     historico.remover_operacao(op_id)
