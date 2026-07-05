@@ -36,6 +36,7 @@ from werkzeug.utils import secure_filename
 from services import conferencia, historico, mapeador, perfis, preenchimento
 from services.parser_listagem import extrair_lancamentos
 from services.utils import (
+    MODELOS_DIR,
     OUTPUTS_DIR,
     UPLOADS_DIR,
     carregar_sessao,
@@ -220,6 +221,21 @@ def secretarias_limpar_molde(slug):
         ), 400
     perfis.remover_molde(slug)
     return redirect(url_for("secretarias"))
+
+
+@app.route("/secretarias/<slug>/molde/baixar")
+def secretarias_baixar_molde(slug):
+    """Baixa o molde fixo da secretaria (para abrir no Excel ou reaproveitar)."""
+    if not perfis.perfil_valido(slug) or not perfis.existe_molde(slug):
+        abort(404)
+    caminho = perfis.caminho_molde(slug).resolve()
+    if MODELOS_DIR.resolve() not in caminho.parents:  # guarda anti path traversal
+        abort(403)
+    info = perfis.info_molde(slug) or {}
+    nome = secure_filename(info.get("nome_original") or "") or f"molde_{slug}.xlsx"
+    if not nome.lower().endswith(".xlsx"):
+        nome += ".xlsx"
+    return send_file(caminho, as_attachment=True, download_name=nome)
 
 
 @app.route("/analisar", methods=["POST"])

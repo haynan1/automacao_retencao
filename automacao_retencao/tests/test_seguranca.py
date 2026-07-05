@@ -23,3 +23,13 @@ def test_post_mesma_origem_passa_o_hook():
 
 def test_get_nao_e_afetado():
     assert CLIENT.get("/secretarias").status_code == 200
+
+
+def test_baixar_molde_saude():
+    r = CLIENT.get("/secretarias/saude/molde/baixar")
+    assert r.status_code == 200
+    assert "spreadsheet" in r.headers.get("Content-Type", "")
+
+
+def test_baixar_molde_slug_inexistente():
+    assert CLIENT.get("/secretarias/naoexiste/molde/baixar").status_code == 404
