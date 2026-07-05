@@ -600,17 +600,35 @@ def processar(sid):
         ), 500
 
 
+def _dados_grafico(d: dict | None) -> list[dict]:
+    """Transforma {rótulo: Decimal} em barras {label, valor, pct}, ordenadas
+    por valor (desc). pct = proporção ao maior valor (para largura da barra)."""
+    if not d:
+        return []
+    maximo = max(d.values())
+    itens = sorted(d.items(), key=lambda kv: kv[1], reverse=True)
+    barras = []
+    for label, valor in itens:
+        pct = float(valor / maximo * 100) if maximo and maximo != 0 else 0.0
+        barras.append({"label": label, "valor": valor, "pct": max(0.0, min(100.0, round(pct, 2)))})
+    return barras
+
+
 @app.route("/resultado/<sid>")
 def resultado(sid):
     dados = _sessao_ou_404(sid)
     if "resumo" not in dados:
         return redirect(url_for("mapeamento", sid=sid))
+    resumo = dados["resumo"]
     return render_template(
         "resultado.html",
         sid=sid,
         competencia=dados["competencia"],
         output_nome=dados["output_nome"],
-        resumo=dados["resumo"],
+        resumo=resumo,
+        grafico_setor=_dados_grafico(resumo.get("por_setor")),
+        grafico_coluna=_dados_grafico(resumo.get("por_coluna")),
+        grafico_tipo=_dados_grafico(resumo.get("por_tipo")),
     )
 
 

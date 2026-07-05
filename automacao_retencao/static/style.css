@@ -524,3 +524,16 @@ html[data-bs-theme="light"] .secretaria-block {
   background: linear-gradient(140deg, rgba(79,140,255,.14), rgba(124,92,255,.10));
   border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem;
 }
+
+/* ===================== Gráficos de barras (série única) ===================== */
+.bars { display: grid; gap: 8px; }
+.bar-row { display: grid; grid-template-columns: minmax(84px, 26%) 1fr auto; align-items: center; gap: 10px; }
+.bar-label { color: var(--muted); font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bar-track { background: var(--surface-2); border: 1px solid var(--border-soft); border-radius: 6px; height: 18px; overflow: hidden; }
+.bar-fill {
+  height: 100%; border-radius: 6px; min-width: 3px;
+  background: linear-gradient(90deg, var(--accent), #7c5cff);
+  transition: width .8s cubic-bezier(.2,.7,.2,1);
+}
+.bar-val { font-size: .8rem; color: var(--text); font-variant-numeric: tabular-nums; }
+.chart-cap { font-size: .72rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); font-weight: 600; }
