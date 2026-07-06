@@ -1,5 +1,16 @@
 /* Automação de Retenções FMS — sistema visual dark-first, editorial. */
 
+/* Inter (variável) auto-hospedado — funciona offline, sem CDN de fontes.
+   Toda a tipografia editorial depende disto: sem ele, o sistema cai para
+   Segoe UI e os pesos intencionais (550/650/750) colapsam em 400/700. */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("fonts/inter-latin.woff2") format("woff2");
+}
+
 :root {
   --bg: #0a0e17;
   --surface: #0f1522;
@@ -15,6 +26,13 @@
   --danger: #f87171;
   --radius: 16px;
   --shadow: 0 24px 60px -30px rgba(0, 0, 0, 0.8);
+  /* Materialidade: fio de luz no topo das superfícies (iluminadas de cima) e
+     anel de foco consistente para toda a interface. */
+  --hairline: rgba(255, 255, 255, 0.055);
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 12px 34px -20px rgba(0, 0, 0, 0.75);
+  --elev-2: 0 2px 4px rgba(0, 0, 0, 0.5), 0 30px 70px -34px rgba(0, 0, 0, 0.85);
+  --ring: 0 0 0 3px rgba(79, 140, 255, 0.4);
+  --accent-glow: rgba(79, 140, 255, 0.55);
 }
 
 /* Modo claro (branco): override das variáveis quando data-bs-theme=light */
@@ -32,6 +50,11 @@ html[data-bs-theme="light"] {
   --warn: #b45309;
   --danger: #dc2626;
   --shadow: 0 20px 50px -32px rgba(15, 23, 42, 0.28);
+  --hairline: rgba(255, 255, 255, 0.8);
+  --elev-1: 0 1px 2px rgba(15, 23, 42, 0.06), 0 12px 28px -18px rgba(15, 23, 42, 0.18);
+  --elev-2: 0 2px 6px rgba(15, 23, 42, 0.08), 0 26px 56px -30px rgba(15, 23, 42, 0.22);
+  --ring: 0 0 0 3px rgba(37, 99, 235, 0.28);
+  --accent-glow: rgba(37, 99, 235, 0.4);
 }
 html[data-bs-theme="light"] .navbar { background: rgba(255, 255, 255, 0.82); }
 html[data-bs-theme="light"] .ambient {
@@ -49,10 +72,32 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+  font-optical-sizing: auto;
+  /* Character variants que deixam o Inter mais nítido e menos "geométrico
+     genérico" num contexto financeiro: 1/l/i disambiguados, a de história
+     única, expoentes verdadeiros. */
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11", "ss03";
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
   min-height: 100vh;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.011em;
 }
+
+::selection { background: rgba(79, 140, 255, 0.28); color: #fff; }
+html[data-bs-theme="light"] ::selection { background: rgba(37, 99, 235, 0.18); color: #0f172a; }
+
+/* Foco visível e consistente em toda a interface — só no teclado, nunca no
+   clique de mouse. Acessibilidade e acabamento no mesmo gesto. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: 8px;
+}
+.btn:focus-visible,
+.form-select:focus-visible,
+.form-control:focus-visible,
+a.navbar-brand:focus-visible { border-radius: 12px; }
 
 /* Scrollbars discretos e consistentes com o tema do sistema. */
 * {
@@ -126,6 +171,39 @@ html[data-bs-theme="light"] *::-webkit-scrollbar-thumb:hover {
 }
 .brand-text { font-weight: 650; line-height: 1.15; font-size: 1.02rem; }
 .brand-text small { font-size: 0.72rem; letter-spacing: 0.02em; }
+.navbar-brand { transition: opacity .15s ease; }
+.navbar-brand:hover { opacity: 0.88; }
+
+/* Ações do topo: botões-ícone quadrados e consistentes, com estado ativo
+   claro para a seção atual (o usuário sempre sabe onde está). */
+.nav-icon {
+  width: 34px; height: 34px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.nav-icon.is-active {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--accent-soft);
+}
+html[data-bs-theme="light"] .nav-icon.is-active { color: var(--accent); }
+.nav-sep {
+  width: 1px; height: 20px; margin: 0 0.15rem;
+  background: var(--border); border-radius: 1px;
+}
+/* "Novo processamento": ação-chave persistente, tingida de acento — distinta
+   sem brigar com o CTA primário de cada tela. */
+.nav-new {
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+  border-radius: 12px; font-weight: 600;
+}
+.nav-new:hover {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  transform: translateY(-1px);
+}
 
 /* Tipografia editorial */
 .display-eyebrow {
@@ -135,24 +213,30 @@ html[data-bs-theme="light"] *::-webkit-scrollbar-thumb:hover {
   font-weight: 600;
   color: var(--accent);
 }
-h1.hero { font-weight: 700; font-size: clamp(1.9rem, 4vw, 2.9rem); line-height: 1.05; }
+h1.hero { font-weight: 700; font-size: clamp(1.9rem, 4vw, 2.9rem); line-height: 1.04; letter-spacing: -0.033em; }
 .lead-muted { color: var(--muted); font-size: 1.05rem; max-width: 46ch; }
 
-/* Superfícies */
+/* Superfícies — profundidade material: fio de luz no topo (iluminado de cima)
+   sobre uma sombra em camadas. Dá peso físico sem ruído. */
 .card, .panel {
+  position: relative;
   background: linear-gradient(180deg, var(--surface), var(--surface-2));
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  box-shadow: var(--elev-1), inset 0 1px 0 0 var(--hairline);
 }
 .panel { padding: 1.5rem; }
 .panel-pad { padding: 1.75rem; }
 
 .upload-card {
-  transition: border-color 0.2s ease, transform 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
 }
-.upload-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.upload-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-3px);
+  box-shadow: var(--elev-2), inset 0 1px 0 0 var(--hairline), 0 18px 40px -24px var(--accent-glow);
+}
 .upload-card.filled { border-color: var(--success); }
 .upload-icon {
   width: 52px; height: 52px; border-radius: 14px;
@@ -162,6 +246,39 @@ h1.hero { font-weight: 700; font-size: clamp(1.9rem, 4vw, 2.9rem); line-height: 
 .upload-card.filled .upload-icon { background: rgba(52, 211, 153, 0.14); color: var(--success); }
 
 input[type="file"] { display: none; }
+
+/* Drop-zone da Listagem: ocupa o espaço livre do card e comunica a ação,
+   em vez de deixar um vazio morto. Aceita arrastar-e-soltar de verdade. */
+.dropzone {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 128px;
+  padding: 1.1rem;
+  text-align: center;
+  border: 1.5px dashed var(--border);
+  border-radius: 12px;
+  background: rgba(79, 140, 255, 0.03);
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.dropzone-ico { font-size: 1.5rem; color: var(--muted); transition: color 0.18s ease; }
+.dropzone-hint { font-size: 0.76rem; color: var(--muted); }
+.upload-card:hover .dropzone { border-color: rgba(79, 140, 255, 0.5); }
+.upload-card:hover .dropzone-ico { color: var(--accent); }
+.upload-card.dragover .dropzone {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.upload-card.dragover .dropzone-ico { color: var(--accent); }
+.upload-card.filled .dropzone {
+  border-style: solid;
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(52, 211, 153, 0.06);
+}
+.upload-card.filled .dropzone-ico { color: var(--success); }
 
 /* Escolha de molde: fixo vs upload */
 .opt-modelo {
@@ -209,14 +326,23 @@ input[type="file"] { display: none; }
   display: flex; align-items: center; gap: 0.55rem;
   padding: 0.4rem 0.9rem; border-radius: 999px;
   border: 1px solid var(--border); color: var(--muted); font-size: 0.85rem;
+  background: var(--surface);
+  box-shadow: inset 0 1px 0 0 var(--hairline);
+  transition: color .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease;
 }
 .stepper .step .n {
   width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
   font-size: 0.72rem; background: var(--surface-2); border: 1px solid var(--border);
+  transition: background .2s ease, color .2s ease, border-color .2s ease;
 }
-.stepper .step.active { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
-.stepper .step.active .n { background: var(--accent); color: #fff; border-color: var(--accent); }
+.stepper .step.active {
+  color: var(--text); border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 1px 0 0 var(--hairline), 0 8px 22px -12px var(--accent-glow);
+}
+.stepper .step.active .n { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 4px 10px -4px var(--accent-glow); }
 .stepper .step.done { color: var(--success); border-color: rgba(52,211,153,0.35); }
+.stepper .step.done .n { background: rgba(52,211,153,0.16); color: var(--success); border-color: rgba(52,211,153,0.4); }
 
 /* Tabelas */
 .table { --bs-table-bg: transparent; --bs-table-color: var(--text); margin: 0; }
@@ -243,14 +369,23 @@ input[type="file"] { display: none; }
 .value-pos { color: var(--text); font-weight: 600; }
 
 /* Botões */
+.btn { transition: transform .12s ease, box-shadow .2s ease, background-color .15s ease, border-color .15s ease; }
 .btn-primary {
   --bs-btn-bg: var(--accent); --bs-btn-border-color: var(--accent);
   --bs-btn-hover-bg: #3f7cf0; --bs-btn-hover-border-color: #3f7cf0;
   --bs-btn-active-bg: #3f7cf0; font-weight: 600; border-radius: 12px;
-  box-shadow: 0 10px 26px -12px rgba(79,140,255,0.7);
+  /* Brilho de cima (sheen) + halo do acento: botão com material, não chapado. */
+  background-image: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0) 42%);
+  box-shadow: 0 10px 26px -12px var(--accent-glow), inset 0 1px 0 0 rgba(255,255,255,0.22);
 }
+.btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px -14px var(--accent-glow), inset 0 1px 0 0 rgba(255,255,255,0.28);
+}
+.btn-primary:active { transform: translateY(0); box-shadow: 0 6px 16px -10px var(--accent-glow), inset 0 1px 0 0 rgba(255,255,255,0.18); }
 .btn-lg { padding: 0.8rem 1.6rem; }
 .btn-outline-light { border-radius: 12px; }
+.btn-outline-light:hover { transform: translateY(-1px); }
 .btn-danger-soft {
   --bs-btn-color: var(--danger);
   --bs-btn-border-color: rgba(248,113,113,0.35);
@@ -262,10 +397,16 @@ input[type="file"] { display: none; }
 
 .form-select, .form-control {
   background: var(--surface-2); border-color: var(--border); color: var(--text); border-radius: 10px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+  transition: border-color .15s ease, box-shadow .15s ease;
 }
+html[data-bs-theme="light"] .form-select,
+html[data-bs-theme="light"] .form-control { box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04); }
 .form-select:focus, .form-control:focus {
-  border-color: var(--accent); box-shadow: 0 0 0 0.2rem var(--accent-soft); background: var(--surface-2); color: var(--text);
+  border-color: var(--accent); box-shadow: var(--ring); background: var(--surface-2); color: var(--text);
 }
+html[data-bs-theme="light"] .form-select:focus,
+html[data-bs-theme="light"] .form-control:focus { background: #fff; }
 
 .alert-soft-danger {
   background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3); color: #fecaca; border-radius: var(--radius);
@@ -500,7 +641,12 @@ html[data-bs-theme="light"] .secretaria-block {
 /* Barra de reconciliação (ilustrativa) */
 .recon-track { display: flex; height: 40px; border-radius: 12px; overflow: hidden; border: 1px solid var(--border); background: var(--surface-2); }
 .recon-seg { width: 0; transition: width 1s cubic-bezier(.2,.7,.2,1); display: flex; align-items: center; justify-content: center;
-  color: #05121f; font-weight: 700; font-size: .8rem; white-space: nowrap; }
+  color: #05121f; font-weight: 700; font-size: .8rem; white-space: nowrap; overflow: hidden; min-width: 0; }
+/* Segmentos estreitos não comportam rótulo interno — o texto é escondido e a
+   legenda abaixo (sempre visível) faz a leitura. Evita clipping/colisão. */
+.recon-seg .recon-seg-label { padding: 0 .5rem; overflow: hidden; text-overflow: ellipsis; }
+.recon-seg[data-w="6"] .recon-seg-label,
+.recon-seg.is-narrow .recon-seg-label { display: none; }
 .recon-seg.a { background: linear-gradient(180deg, #4ade80, #22c55e); }
 .recon-seg.b { background: linear-gradient(180deg, #94a3b8, #64748b); color: #fff; }
 .recon-seg.c { background: linear-gradient(180deg, #fca5a5, #f87171); color: #3b0a0a; }

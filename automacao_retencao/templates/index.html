@@ -45,7 +45,11 @@
               <div class="fw-semibold">Listagem de Eventos</div>
               <div class="text-secondary small">Relatório exportado do sistema (.xlsx)</div>
             </div>
-            <div class="small text-info mt-auto" data-empty="Clique para selecionar" id="nome-listagem">Clique para selecionar</div>
+            <div class="dropzone mt-auto">
+              <i class="bi bi-cloud-arrow-up dropzone-ico"></i>
+              <div class="small text-info" data-empty="Clique para selecionar" id="nome-listagem">Clique para selecionar</div>
+              <div class="dropzone-hint">ou arraste o arquivo aqui</div>
+            </div>
             <input type="file" name="listagem" accept=".xlsx" required id="input-listagem">
           </label>
         </div>
@@ -109,11 +113,28 @@
   const inLista = document.getElementById('input-listagem');
   const nmLista = document.getElementById('nome-listagem');
   const cardLista = document.getElementById('card-listagem');
-  inLista.addEventListener('change', () => {
+  function refletirListagem() {
     const has = inLista.files.length > 0;
     nmLista.textContent = has ? inLista.files[0].name : nmLista.dataset.empty;
     nmLista.classList.toggle('text-success', has); nmLista.classList.toggle('text-info', !has);
     cardLista.classList.toggle('filled', has);
+  }
+  inLista.addEventListener('change', refletirListagem);
+
+  // Arrastar-e-soltar de verdade na Listagem.
+  ['dragenter', 'dragover'].forEach(ev => cardLista.addEventListener(ev, e => {
+    e.preventDefault(); cardLista.classList.add('dragover');
+  }));
+  ['dragleave', 'dragend', 'drop'].forEach(ev => cardLista.addEventListener(ev, e => {
+    if (ev === 'dragleave' && cardLista.contains(e.relatedTarget)) return;
+    cardLista.classList.remove('dragover');
+  }));
+  cardLista.addEventListener('drop', e => {
+    e.preventDefault();
+    const f = e.dataTransfer && e.dataTransfer.files;
+    if (f && f.length && f[0].name.toLowerCase().endsWith('.xlsx')) {
+      inLista.files = f; refletirListagem();
+    }
   });
 
   const inModelo = document.getElementById('input-modelo');

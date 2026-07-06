@@ -11,8 +11,11 @@
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   function abrev(v) {
-    if (v >= 1e6) return 'R$ ' + (v / 1e6).toFixed(1).replace('.', ',') + 'M';
-    if (v >= 1e3) return 'R$ ' + Math.round(v / 1e3) + 'k';
+    // Milhares/milhões com 1 decimal só quando não é inteiro, para evitar
+    // rótulos de eixo duplicados (ex.: 1500 e 2000 ambos virando "2k").
+    const kfmt = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(1).replace('.', ','));
+    if (v >= 1e6) return 'R$ ' + kfmt(v / 1e6) + 'M';
+    if (v >= 1e3) return 'R$ ' + kfmt(v / 1e3) + 'k';
     return 'R$ ' + Math.round(v);
   }
   function nice(m) {
