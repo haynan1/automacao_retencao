@@ -51,8 +51,12 @@ def localizar_aba_destino(wb, competencia: str | None) -> str | None:
     return None
 
 
-def _tipo_canonico(texto: str) -> str | None:
-    """Converte o rotulo de uma linha em 'Mensal'/'13º salário' ou None."""
+def tipo_canonico(texto: str) -> str | None:
+    """Converte o rotulo de uma linha em 'Mensal'/'13º salário' ou None.
+
+    Publico de proposito: o construtor de molde precisa da MESMA regra para
+    recusar um nome de setor que o motor confundiria com uma linha de tipo.
+    """
     norm = normalizar_texto(texto)
     if not norm:
         return None
@@ -118,7 +122,7 @@ def localizar_blocos_setores(ws: Worksheet) -> list[dict]:
             if proximo is not None and normalizar_texto(str(proximo)) == "TIPO":
                 linha_cabecalho = linha + 1
                 colunas = localizar_colunas_rubricas(ws, linha_cabecalho)
-                linhas_tipo, linha_total, fim = _localizar_linhas_tipo(
+                linhas_tipo, linha_total, proxima = _localizar_linhas_tipo(
                     ws, linha_cabecalho, max_row
                 )
                 blocos.append(
@@ -132,7 +136,10 @@ def localizar_blocos_setores(ws: Worksheet) -> list[dict]:
                         "linha_total": linha_total,
                     }
                 )
-                linha = max(fim, linha_cabecalho) + 1
+                # `proxima` ja e a primeira linha FORA do bloco: quando a
+                # varredura parou no nome do proximo setor, retomar em
+                # 'proxima + 1' engoliria aquele bloco inteiro.
+                linha = max(proxima, linha_cabecalho + 1)
                 continue
         linha += 1
 
@@ -142,8 +149,12 @@ def localizar_blocos_setores(ws: Worksheet) -> list[dict]:
 def _localizar_linhas_tipo(ws, linha_cabecalho: int, max_row: int):
     """A partir do cabecalho, encontra as linhas Mensal/13º e a linha TOTAL.
 
-    Retorna (linhas_tipo: dict, linha_total: int|None, ultima_linha: int).
-    Para de varrer ao encontrar TOTAL ou o inicio de um novo bloco.
+    Retorna (linhas_tipo: dict, linha_total: int|None, proxima_linha: int),
+    em que `proxima_linha` e a primeira linha que ja NAO pertence a este
+    bloco — e onde a varredura de blocos deve retomar.
+
+    Para ao encontrar TOTAL (que fecha o bloco) ou um rotulo desconhecido
+    (que costuma ser o nome do proximo setor, e por isso nao e consumido).
     """
     linhas_tipo: dict[str, int] = {}
     linha_total = None
@@ -159,15 +170,16 @@ def _localizar_linhas_tipo(ws, linha_cabecalho: int, max_row: int):
             linha += 1
             continue
         if "TOTAL" in norm:
-            linha_total = linha
-            break
+            # TOTAL pertence ao bloco: o proximo comeca na linha seguinte.
+            return linhas_tipo, linha, linha + 1
 
-        tipo = _tipo_canonico(texto)
+        tipo = tipo_canonico(texto)
         if tipo and tipo not in linhas_tipo:
             linhas_tipo[tipo] = linha
         elif not tipo:
-            # Rotulo desconhecido: provavelmente inicio de outro bloco.
-            break
+            # Rotulo desconhecido: provavelmente o nome do proximo setor.
+            # Devolve a propria linha para que ela seja reavaliada.
+            return linhas_tipo, None, linha
         linha += 1
 
     return linhas_tipo, linha_total, linha

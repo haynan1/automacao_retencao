@@ -90,6 +90,10 @@
                 <label class="form-check-label small" for="definir-fixo">Definir como <strong>molde fixo</strong> desta secretaria (fica salvo)</label>
               </div>
             </div>
+
+            <a href="#" class="small text-decoration-none" id="link-construtor">
+              <i class="bi bi-grid-3x3 me-1"></i>Montar o molde na tela, sem Excel
+            </a>
           </div>
         </div>
       </div>
@@ -151,8 +155,10 @@
   const rUpload = document.getElementById('fonte-upload');
   const bloco = document.getElementById('bloco-upload-modelo');
   const labelFixo = document.getElementById('molde-fixo-label');
+  const linkConstrutor = document.getElementById('link-construtor');
 
   function refreshMolde() {
+    linkConstrutor.href = '/molde/' + encodeURIComponent(perfilSel.value);
     const info = MOLDES[perfilSel.value];
     if (info) {
       optFixo.classList.remove('disabled');

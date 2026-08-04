@@ -6,8 +6,10 @@ processamento -> resultado. Toda a regra de negócio vive em services/.
 
 from __future__ import annotations
 
+import io
 import os
 import re
+import tempfile
 import traceback
 from decimal import Decimal
 from pathlib import Path
@@ -34,7 +36,7 @@ from flask import (
 from openpyxl import load_workbook
 from werkzeug.utils import secure_filename
 
-from services import conferencia, historico, mapeador, perfis, preenchimento
+from services import conferencia, historico, mapeador, molde, perfis, preenchimento
 from services.parser_listagem import extrair_lancamentos
 from services.utils import (
     MODELOS_DIR,
@@ -237,6 +239,142 @@ def secretarias_baixar_molde(slug):
     if not nome.lower().endswith(".xlsx"):
         nome += ".xlsx"
     return send_file(caminho, as_attachment=True, download_name=nome)
+
+
+# ---------------------------------------------------------------------------
+# Construtor de molde — a estrutura da planilha desenhada na interface
+# ---------------------------------------------------------------------------
+
+def _perfil_ou_404(slug: str) -> str:
+    if not perfis.perfil_valido(slug):
+        abort(404)
+    return slug
+
+
+def _spec_do_pedido() -> dict:
+    """Le a spec do corpo JSON. Corpo ausente/invalido vira ErroDeMolde."""
+    corpo = request.get_json(silent=True)
+    if not isinstance(corpo, dict) or not isinstance(corpo.get("spec"), dict):
+        raise molde.ErroDeMolde(["Estrutura do molde não recebida."])
+    return corpo["spec"]
+
+
+@app.route("/molde/<slug>")
+def molde_editor(slug):
+    """Tela do construtor: abre o desenho salvo, o molde atual ou uma folha em branco."""
+    _perfil_ou_404(slug)
+    nome = perfis.nome_perfil(slug)
+    spec, origem = molde.spec_inicial(slug, nome)
+    return render_template(
+        "molde.html",
+        slug=slug,
+        perfil_nome=nome,
+        spec=spec,
+        origem=origem,
+        spec_branco=molde.spec_em_branco(nome),
+        tem_molde=perfis.existe_molde(slug),
+        info_molde=perfis.info_molde(slug),
+        tipos_suportados=list(molde.TIPOS_SUPORTADOS),
+        limites={
+            "abas": molde.MAX_ABAS,
+            "setores": molde.MAX_SETORES,
+            "colunas": molde.MAX_COLUNAS,
+        },
+    )
+
+
+@app.route("/molde/<slug>/importar")
+def molde_importar(slug):
+    """Devolve a spec extraida do molde fixo atual (para editar em vez de redesenhar)."""
+    _perfil_ou_404(slug)
+    if not perfis.existe_molde(slug):
+        return jsonify({"ok": False, "problemas": ["Esta secretaria ainda não tem molde fixo."]}), 404
+    try:
+        return jsonify({"ok": True, "spec": molde.extrair_spec(perfis.caminho_molde(slug))})
+    except molde.ErroDeMolde as exc:
+        return jsonify({"ok": False, "problemas": exc.problemas}), 422
+    except Exception as exc:  # noqa: BLE001
+        log.error("Falha ao importar molde do perfil '%s': %s", slug, exc)
+        return jsonify({"ok": False, "problemas": ["Não foi possível ler o molde atual."]}), 500
+
+
+@app.route("/molde/<slug>/previa", methods=["POST"])
+def molde_previa(slug):
+    """Valida o desenho e devolve a prévia — sem gravar nada em disco."""
+    _perfil_ou_404(slug)
+    try:
+        spec, _wb, divergencias = molde.construir(_spec_do_pedido())
+    except molde.ErroDeMolde as exc:
+        return jsonify({"ok": False, "problemas": exc.problemas, "divergencias": []}), 200
+    except Exception as exc:  # noqa: BLE001
+        log.error("Falha na prévia do molde '%s': %s\n%s", slug, exc, traceback.format_exc())
+        return jsonify({"ok": False, "problemas": ["Erro inesperado ao montar a prévia."],
+                        "divergencias": []}), 500
+
+    return jsonify({
+        "ok": not divergencias,
+        "problemas": [],
+        "divergencias": divergencias,
+        "spec": spec,
+        "resumo": molde.resumo(spec),
+        "grade": molde.grade(spec),
+    })
+
+
+@app.route("/molde/<slug>/baixar", methods=["POST"])
+def molde_baixar(slug):
+    """Gera o .xlsx e devolve para download, sem tocar no molde fixo."""
+    _perfil_ou_404(slug)
+    try:
+        _spec, wb, divergencias = molde.construir(_spec_do_pedido())
+    except molde.ErroDeMolde as exc:
+        return jsonify({"ok": False, "problemas": exc.problemas}), 422
+
+    if divergencias:
+        return jsonify({"ok": False, "problemas": divergencias}), 422
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return send_file(
+        buffer,
+        as_attachment=True,
+        download_name=f"molde_{secure_filename(slug) or 'secretaria'}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@app.route("/molde/<slug>/salvar", methods=["POST"])
+def molde_salvar(slug):
+    """Fixa o molde desenhado como padrão da secretaria.
+
+    Só grava depois que o motor de preenchimento releu o arquivo gerado e
+    confirmou setores, colunas e tipos. `perfis.definir_molde` guarda um
+    backup timestampado do molde anterior.
+    """
+    _perfil_ou_404(slug)
+    try:
+        spec, wb, divergencias = molde.construir(_spec_do_pedido())
+    except molde.ErroDeMolde as exc:
+        return jsonify({"ok": False, "problemas": exc.problemas}), 422
+
+    if divergencias:
+        log.warning("Molde do perfil '%s' recusado na verificação: %s", slug, divergencias)
+        return jsonify({"ok": False, "problemas": divergencias}), 422
+
+    try:
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = Path(pasta) / "molde_construido.xlsx"
+            wb.save(caminho)
+            perfis.definir_molde(slug, caminho, f"molde_construido_{slug}.xlsx")
+        molde.salvar_estrutura(slug, spec)
+    except OSError as exc:
+        log.error("Falha ao gravar molde do perfil '%s': %s", slug, exc)
+        return jsonify({"ok": False, "problemas": ["Não foi possível gravar o molde em disco."]}), 500
+
+    log.info("Molde construído para o perfil '%s': %d setor(es), %d coluna(s), %d aba(s).",
+             slug, len(spec["setores"]), len(spec["colunas"]), len(spec["abas"]))
+    return jsonify({"ok": True, "redirect": url_for("secretarias")})
 
 
 @app.route("/analisar", methods=["POST"])

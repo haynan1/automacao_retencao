@@ -23,6 +23,30 @@ def _preparar(listagem, modelo):
     return r, lanc, wb, ws, colunas, setores
 
 
+def test_bloco_sem_linha_total_nao_engole_o_bloco_seguinte(tmp_path):
+    """Regressão: a varredura parava no nome do próximo setor e o consumia.
+
+    Em molde com linha TOTAL (o caso real) nada muda — mas um molde sem ela
+    perdia um bloco inteiro em silêncio, e com ele todo o dinheiro do setor.
+    """
+    from openpyxl import Workbook
+    wb = Workbook()
+    ws = wb.active
+    linha = 1
+    for setor in ("ADMINISTRATIVO", "ACS", "SAMU"):
+        ws.cell(row=linha, column=1, value=setor)
+        ws.cell(row=linha + 1, column=1, value="Tipo")
+        ws.cell(row=linha + 1, column=2, value="PREVIBELOS")
+        ws.cell(row=linha + 2, column=1, value="Mensal")
+        ws.cell(row=linha + 3, column=1, value="13º salário")
+        linha += 5  # sem linha TOTAL, com uma linha em branco entre blocos
+
+    blocos = preenchimento.localizar_blocos_setores(ws)
+    assert [b["setor"] for b in blocos] == ["ADMINISTRATIVO", "ACS", "SAMU"]
+    assert all(set(b["linhas_tipo"]) == {"Mensal", "13º salário"} for b in blocos)
+    assert all(b["linha_total"] is None for b in blocos)
+
+
 def test_total_do_evento_excluido(modelo):
     wb = load_workbook(modelo)
     colunas = preenchimento.listar_colunas_modelo(wb["MOLDE"])

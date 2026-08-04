@@ -590,6 +590,175 @@ html[data-bs-theme="light"] .secretaria-block {
   }
 }
 
+/* ===================== Construtor de molde ===================== */
+
+.molde-page .lead-muted { max-width: 62ch; }
+
+/* Barra de comando: o veredito do motor e as ações acompanham a rolagem.
+   Quem edita nunca precisa procurar se o desenho está de pé. */
+.molde-bar {
+  position: sticky;
+  top: 4.6rem;
+  z-index: 15;
+  padding: 0.7rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  backdrop-filter: saturate(140%) blur(14px);
+  box-shadow: var(--elev-1), inset 0 1px 0 0 var(--hairline);
+  transition: border-color 0.2s ease;
+}
+.molde-bar:has(#problemas:not([hidden])) { border-color: rgba(248, 113, 113, 0.34); }
+.molde-bar-topo {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 1rem; flex-wrap: wrap;
+}
+.molde-bar-acoes { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+.molde-status { display: inline-flex; align-items: center; gap: 0.6rem; font-size: 0.9rem; font-weight: 550; min-width: 0; }
+.molde-dot { width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; background: var(--muted); }
+.molde-status[data-estado="verificando"] .molde-dot { background: var(--warn); animation: molde-pulso 1.1s ease-in-out infinite; }
+.molde-status[data-estado="ok"] { color: var(--success); }
+.molde-status[data-estado="ok"] .molde-dot { background: var(--success); box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.16); }
+.molde-status[data-estado="erro"] { color: var(--danger); }
+.molde-status[data-estado="erro"] .molde-dot { background: var(--danger); box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.16); }
+@keyframes molde-pulso { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .molde-status .molde-dot { animation: none; } }
+
+.molde-ajuda { color: var(--muted); font-size: 0.83rem; line-height: 1.5; margin-bottom: 0.9rem; }
+
+/* Listas editáveis (abas / setores / colunas).
+   O desvanecimento na base diz "tem mais aqui embaixo" — sem ele, uma linha
+   cortada ao meio parece defeito de layout. */
+.molde-lista {
+  display: grid; gap: 0.4rem; max-height: 22rem; overflow-y: auto;
+  padding-right: 0.2rem; padding-bottom: 0.15rem;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.6rem), transparent 100%);
+}
+.molde-lista:not(:hover) { scrollbar-color: transparent transparent; }
+/* Rolagem no fim: nada mais a revelar, nada a desvanecer. */
+.molde-lista.no-fim { mask-image: none; }
+.molde-item {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.molde-item:hover { background: var(--surface-2); }
+#lista-setores .molde-item { grid-template-columns: 2rem minmax(0, 1fr) 8rem auto; }
+.molde-item-n { color: var(--muted); font-size: 0.76rem; text-align: right; }
+.molde-item-apelido { max-width: 8rem; }
+.molde-item-acoes { display: flex; gap: 0.2rem; }
+.molde-item-acoes .btn {
+  width: 28px; height: 28px; padding: 0; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem;
+}
+/* Desabilitado precisa continuar legível: sumir por completo faz a fileira de
+   ações parecer quebrada, ainda mais no tema claro. */
+.molde-item-acoes .btn:disabled { opacity: 0.42; }
+html[data-bs-theme="light"] .molde-item-acoes .btn:disabled { opacity: 0.5; }
+.molde-item.is-repetido, .molde-item.is-vazio {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.06);
+}
+.molde-item.is-repetido .form-control, .molde-item.is-vazio .form-control { border-color: rgba(248, 113, 113, 0.4); }
+/* Tentou adicionar algo que já está na lista: o item existente se anuncia. */
+.molde-item.is-eco { animation: molde-eco 1.4s ease-out; }
+@keyframes molde-eco {
+  0%, 60% { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+  100% { background: transparent; border-color: transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .molde-item.is-eco { animation: none; background: var(--accent-soft); } }
+.molde-vazio {
+  margin: 0; padding: 1.1rem; text-align: center; color: var(--muted); font-size: 0.86rem;
+  border: 1.5px dashed var(--border); border-radius: 12px;
+}
+.molde-add { display: flex; gap: 0.5rem; margin-top: 0.75rem; }
+.molde-add .btn { flex: 0 0 auto; width: 42px; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Tipos e opções */
+.molde-opt {
+  display: inline-flex; align-items: center; padding: 0.45rem 0.9rem;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  cursor: pointer; font-size: 0.88rem; font-weight: 550;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.molde-opt:hover { border-color: var(--accent); }
+.molde-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.molde-opt .form-check-input { margin-top: 0; }
+
+.molde-switches { display: grid; gap: 0.55rem; }
+.molde-switch {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.75rem; align-items: start;
+  padding: 0.7rem 0.85rem; border: 1px solid var(--border-soft); border-radius: 12px;
+  background: var(--surface); cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.molde-switch:hover { border-color: rgba(79, 140, 255, 0.34); }
+.molde-switch:has(input:checked) { border-color: color-mix(in srgb, var(--accent) 34%, transparent); background: var(--accent-soft); }
+.molde-switch .form-check-input { margin-top: 0.15rem; }
+.molde-switch strong { display: block; font-size: 0.9rem; font-weight: 600; }
+.molde-switch em { display: block; font-style: normal; color: var(--muted); font-size: 0.79rem; margin-top: 0.1rem; line-height: 1.45; }
+
+.molde-coluna-direita { position: sticky; top: 9.5rem; }
+
+.molde-problemas {
+  margin: 0.7rem 0 0; padding: 0.7rem 0 0 2.3rem; display: grid; gap: 0.45rem;
+  border-top: 1px solid var(--border-soft); max-height: 9.5rem; overflow-y: auto;
+}
+.molde-problemas li { color: var(--danger); font-size: 0.85rem; line-height: 1.5; }
+
+/* Prévia: é um documento, não um componente do app. Mantém as cores reais da
+   planilha nos dois temas — o que se vê aqui é o que sai no Excel. */
+.molde-previa-moldura {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 0.5rem;
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+.molde-previa-rolagem { overflow: auto; max-height: 26rem; }
+.molde-previa {
+  border-collapse: separate; border-spacing: 1px; width: max-content; min-width: 100%;
+  font-size: 0.66rem; color: #1f2937; table-layout: fixed;
+}
+.molde-previa td {
+  padding: 0.22rem 0.4rem; max-width: 7.5rem; min-width: 3.2rem;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* A coluna de rótulos (Tipo / Mensal / 13º / TOTAL) acompanha a rolagem
+   horizontal — sem ela, uma planilha de 25 colunas vira números órfãos. */
+.molde-previa td:first-child:not([colspan]) { position: sticky; left: 0; z-index: 1; }
+/* Nas faixas mescladas o texto vai à esquerda, e não centralizado como no
+   arquivo: centralizado numa célula de 25 colunas, ficaria fora da vista. */
+.molde-previa .p-titulo { background: #1f4e78; color: #fff; font-weight: 700; font-size: 0.78rem; }
+.molde-previa .p-subtitulo { background: #d9eaf7; color: #10314e; font-weight: 700; }
+.molde-previa .p-secao { background: #1f4e78; color: #fff; font-weight: 700; }
+.molde-previa .p-setor { background: #375a7f; color: #fff; font-weight: 700; }
+.molde-previa .p-cabecalho { background: #1f4e78; color: #fff; font-weight: 700; text-align: center; }
+.molde-previa .p-rotulo { background: #f3f4f6; color: #111827; font-weight: 700; }
+.molde-previa .p-valor { background: #fff2cc; color: #6b5200; text-align: right; font-variant-numeric: tabular-nums; }
+.molde-previa .p-soma { background: #e2f0d9; color: #1e4620; text-align: right; font-weight: 700; }
+.molde-previa .p-rodape { background: #375a7f; color: #fff; text-align: center; font-weight: 600; }
+.molde-previa .p-total-geral { background: #1f4e78; color: #fff; font-weight: 700; }
+.molde-previa .p-vazio { background: #fff; }
+.molde-previa .p-formula { text-align: center; cursor: help; }
+
+@media (max-width: 1199.98px) {
+  .molde-coluna-direita { position: static; }
+  .molde-bar { position: static; }
+}
+@media (max-width: 575.98px) {
+  #lista-setores .molde-item { grid-template-columns: 1.6rem minmax(0, 1fr) auto; }
+  .molde-item-apelido { display: none; }
+  .molde-bar-acoes { width: 100%; }
+  .molde-bar-acoes .btn { flex: 1 1 auto; }
+}
+
 /* ===================== Guia / Como funciona ===================== */
 
 /* Revelação suave ao rolar */

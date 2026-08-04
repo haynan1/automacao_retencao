@@ -53,6 +53,33 @@ python -m pytest
 
 ## 3. Como usar
 
+### 3.1. O molde (uma vez por secretaria)
+
+O molde é a planilha de destino: os blocos de setor, as colunas de rubrica e as
+linhas de tipo. Ele **não precisa mais ser editado no Excel** — em
+**Secretarias → Construir molde** (`/molde/<secretaria>`) a estrutura é
+desenhada na tela:
+
+- **Folha em branco** ou **partir do molde atual** (a estrutura do `.xlsx`
+  existente é lida de volta e vira formulário).
+- Setores, rubricas e abas **sem limite prático** — um por linha, com colar de
+  lista em lote, reordenação e remoção.
+- Parâmetros do bloco: tipos de folha, linha `TOTAL` por setor, coluna
+  `TOTAL DO EVENTO`, linha `TOTAL GERAL` e rodapé com apelido.
+- **Prévia ao vivo** com o mesmo layout do arquivo, célula por célula.
+
+Nada é salvo às cegas: a cada alteração o sistema **gera o `.xlsx` e o relê com
+o mesmo motor que preenche a planilha todo mês** (`localizar_blocos_setores` e
+`listar_colunas_modelo`). Se o motor não enxergar exatamente os setores, as
+colunas e os tipos desenhados, a gravação é recusada e a divergência aparece na
+tela. O molde anterior vira cópia de segurança timestampada.
+
+O construtor recusa por escrito o que o motor descartaria em silêncio: coluna
+repetida a menos de acento ou caixa, rótulo iniciado por `TOTAL`, aba com
+`CONFER` no nome, texto que o Excel leria como fórmula (`=`, `+`, `@`).
+
+### 3.2. O processamento (todo mês)
+
 1. **Exporte** a *Listagem de Eventos* do sistema em **XLSX** (não PDF).
 2. Na tela inicial, envie a *Listagem de Eventos* e a planilha *RETENÇÃO*.
 3. Clique em **Analisar arquivos**.
@@ -96,11 +123,14 @@ automacao_retencao/
 │       ├── mapeamento_lotacoes.json    #   lotação → setor
 │       └── vinculo_rubrica_coluna.json #   evento/rubrica → coluna
 ├── modelos/
-│   └── perfis/<secretaria>/molde_padrao.xlsx   # molde fixo versionado (blank)
+│   └── perfis/<secretaria>/
+│       ├── molde_padrao.xlsx      # molde fixo versionado (blank)
+│       └── molde_estrutura.json   # o desenho do molde (reabrível no construtor)
 ├── services/              # Regra de negócio, isolada do Flask
 │   ├── parser_listagem.py # Lê o relatório de origem (merged-aware, anti-ruído)
 │   ├── normalizador.py    # Texto, folha e rubrica normalizados
 │   ├── mapeador.py        # Dois eixos de vínculo + aprendizado + pendências
+│   ├── molde.py           # Construtor: spec validada -> xlsx -> reverificado
 │   ├── perfis.py          # Perfis por secretaria: molde fixo + vínculos isolados
 │   ├── preenchimento.py   # Localiza blocos/colunas e preenche o modelo
 │   ├── conferencia.py     # Agregação, reconciliação e aba de conferência
@@ -125,6 +155,14 @@ automacao_retencao/
   escolhida na tela inicial e **auto-sugerida** pelo cabeçalho da Listagem.
 - **Molde fixo versionado**: cada secretaria pode ter um molde padrão no repositório
   (blank, sem dados pessoais) — quem clona já processa enviando só a Listagem.
+- **Molde como dado, não como arquivo**: a estrutura vive numa *spec* validada
+  (`molde_estrutura.json`) e o `.xlsx` é um artefato gerado. Isso tira o Excel do
+  caminho crítico e transforma erro silencioso (coluna repetida, rótulo reservado)
+  em recusa explícita. O layout é descrito **uma única vez**, em
+  `molde._linhas_layout` — o gerador e a prévia da tela consomem a mesma sequência,
+  então a prévia não é uma aproximação da planilha: é a planilha.
+- **Verificação de mão dupla**: todo molde gerado é relido pelo motor de
+  preenchimento antes de ser aceito. O construtor não confia na própria geração.
 - **Dois eixos de vínculo com aprendizado**: lotação→setor e evento/rubrica→coluna,
   ambos com sugestão automática, menu suspenso e persistência em JSON.
 - **Interface dark-first com modo claro** em um clique (tema persistido no navegador).
@@ -150,10 +188,11 @@ fica em `config/perfis.json`:
 - **`nome`** — texto exibido no seletor. Edite à vontade.
 - **`deteccao`** — termos que auto-sugerem a secretaria pelo cabeçalho da Listagem.
 
-Para **adicionar** uma secretaria: crie a entrada no JSON (ou use
-`services.perfis.registrar_perfil(nome, deteccao, slug)`) e defina o molde fixo dela pela
-tela inicial (marcando “Definir como molde fixo”). Os dados ficam em
-`config/perfis/<slug>/` e `modelos/perfis/<slug>/`.
+Para **adicionar** uma secretaria: crie a entrada pela tela **Secretarias** (ou use
+`services.perfis.registrar_perfil(nome, deteccao, slug)`) e defina o molde fixo dela
+pelo **construtor de molde** — ou enviando um `.xlsx` na tela inicial com
+“Definir como molde fixo”. Os dados ficam em `config/perfis/<slug>/` e
+`modelos/perfis/<slug>/`.
 
 ### Conferência
 
