@@ -300,6 +300,43 @@ def test_conferir_concorda_com_construir():
     assert div_rapidas == div_cheias == []
 
 
+def test_estilos_em_cache_nao_vazam_entre_workbooks(tmp_path):
+    """`_estilo` é memoizado: o MESMO objeto Font/Fill vai para todo arquivo.
+
+    Se o openpyxl mutasse esses objetos ao indexá-los, o segundo molde gerado
+    sairia com as cores do primeiro. Ele indexa por valor — este teste trava
+    essa premissa.
+    """
+    from openpyxl import load_workbook
+    caminhos = []
+    for i, colunas in enumerate([["ARSEM", "CEF"], ["IR", "IPASGO", "PREVIBELOS"], ["ARSEM"]]):
+        spec = molde.validar_spec(spec_valida(colunas=colunas))
+        caminho = tmp_path / f"w{i}.xlsx"
+        molde.gerar_workbook(spec).save(caminho)
+        caminhos.append(caminho)
+
+    for caminho in caminhos:
+        ws = load_workbook(caminho)["MOLDE"]
+        bloco = preenchimento.localizar_blocos_setores(ws)[0]
+        cabecalho = ws.cell(row=bloco["linha_cabecalho"], column=2)
+        valor = ws.cell(row=bloco["linhas_tipo"]["Mensal"], column=2)
+        total = ws.cell(row=bloco["linha_total"], column=2)
+        assert cabecalho.fill.fgColor.rgb == "FF1F4E78"
+        assert cabecalho.font.b is True and cabecalho.font.color.rgb == "FFFFFFFF"
+        assert valor.fill.fgColor.rgb == "FFFFF2CC"
+        assert valor.number_format == "\\R\\$\\ #,##0.00"
+        assert total.fill.fgColor.rgb == "FFE2F0D9"
+
+
+def test_estrutura_gravada_de_forma_atomica(perfis_tmp):
+    """Nada de .tmp sobrando, e o conteúdo é o desenho completo."""
+    spec = molde.validar_spec(spec_valida())
+    molde.salvar_estrutura("saude", spec)
+    pasta = molde.caminho_estrutura("saude").parent
+    assert list(pasta.glob("*.tmp")) == []
+    assert molde.carregar_estrutura("saude") == spec
+
+
 def test_workbook_sem_estilo_tem_o_mesmo_conteudo():
     spec = molde.validar_spec(spec_valida())
     com = molde.gerar_workbook(spec)["MOLDE"]

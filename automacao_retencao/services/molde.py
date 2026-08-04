@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 from functools import lru_cache
 from pathlib import Path
@@ -865,10 +866,17 @@ def caminho_estrutura(slug: str) -> Path:
 
 
 def salvar_estrutura(slug: str, spec: dict) -> None:
-    """Guarda a spec ao lado do molde: o desenho e reabrivel e auditavel."""
+    """Guarda a spec ao lado do molde: o desenho e reabrivel e auditavel.
+
+    Escrita atomica: grava num temporario e so entao troca. Uma queda no meio
+    da escrita deixaria um JSON pela metade — e o desenho de dezenas de setores
+    voltaria como 'folha em branco' na proxima abertura.
+    """
     caminho = caminho_estrutura(slug)
-    with caminho.open("w", encoding="utf-8") as fh:
+    temporario = caminho.with_suffix(".json.tmp")
+    with temporario.open("w", encoding="utf-8") as fh:
         json.dump(spec, fh, ensure_ascii=False, indent=2)
+    os.replace(temporario, caminho)
 
 
 def carregar_estrutura(slug: str) -> dict | None:

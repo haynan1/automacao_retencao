@@ -93,6 +93,15 @@ def test_previa_sem_corpo_json_nao_quebra():
     assert dados["problemas"] == ["Estrutura do molde não recebida."]
 
 
+def test_previa_recusa_corpo_grande_sem_desserializar():
+    """Uma spec é texto: 512 KB já é folga. O teto de 30 MB é para planilhas."""
+    gordo = {"spec": dict(SPEC, colunas=[f"RUBRICA {'X' * 60} {i}" for i in range(8000)])}
+    resposta = CLIENT.post("/molde/saude/previa", json=gordo)
+    dados = resposta.get_json()
+    assert dados["ok"] is False
+    assert "grande demais" in dados["problemas"][0]
+
+
 def test_previa_ignora_corpo_que_nao_e_json():
     resposta = CLIENT.post("/molde/saude/previa", data="setores=1")
     assert resposta.status_code == 200

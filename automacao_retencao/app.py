@@ -52,6 +52,9 @@ from services.utils import (
 )
 
 MAX_UPLOAD_MB = 30
+# A spec do construtor de molde e texto puro: o molde real da secretaria dá
+# ~4 KB. 512 KB é folga de sobra e mantém o corpo JSON longe do teto de upload.
+MAX_SPEC_KB = 512
 EXTENSOES_OK = {".xlsx"}
 
 app = Flask(__name__)
@@ -252,7 +255,16 @@ def _perfil_ou_404(slug: str) -> str:
 
 
 def _spec_do_pedido() -> dict:
-    """Le a spec do corpo JSON. Corpo ausente/invalido vira ErroDeMolde."""
+    """Le a spec do corpo JSON. Corpo ausente/invalido vira ErroDeMolde.
+
+    O teto de 30 MB do app existe para planilhas; uma spec e texto e nunca
+    passa de alguns KB. Recusar pelo Content-Length evita desserializar
+    megabytes de JSON so para descobrir depois que era absurdo.
+    """
+    if (request.content_length or 0) > MAX_SPEC_KB * 1024:
+        raise molde.ErroDeMolde(
+            [f"Estrutura do molde grande demais (limite de {MAX_SPEC_KB} KB)."]
+        )
     corpo = request.get_json(silent=True)
     if not isinstance(corpo, dict) or not isinstance(corpo.get("spec"), dict):
         raise molde.ErroDeMolde(["Estrutura do molde não recebida."])

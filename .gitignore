@@ -50,3 +50,5 @@ docs
 
 # ==== Backups de molde gerados em runtime ====
 *.bak.xlsx
+# Resíduo de escrita atômica interrompida (não é estado válido).
+*.json.tmp
