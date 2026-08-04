@@ -120,13 +120,80 @@ def test_tipo_nao_suportado_e_descartado():
     assert spec["tipos"] == ["Mensal"]
 
 
-def test_orcamento_de_celulas_barra_molde_gigante():
+def test_bloco_grande_demais_e_recusado():
+    """O bloco (setores × colunas) pesa na prévia, que roda a cada tecla."""
+    problemas = problemas_de(
+        setores=[{"nome": f"SETOR {i}"} for i in range(100)],
+        colunas=[f"RUBRICA {i}" for i in range(100)],
+    )
+    assert any("células por aba" in p for p in problemas)
+
+
+def test_arquivo_grande_demais_e_recusado():
+    """O total de células pesa na gravação do .xlsx."""
     problemas = problemas_de(
         abas=[f"M{i}" for i in range(24)],
-        setores=[{"nome": f"SETOR {i}"} for i in range(200)],
-        colunas=[f"RUBRICA {i}" for i in range(200)],
+        setores=[{"nome": f"SETOR {i}"} for i in range(30)],
+        colunas=[f"RUBRICA {i}" for i in range(30)],
     )
-    assert any("células" in p for p in problemas)
+    assert any("molde inteiro" in p for p in problemas)
+
+
+def test_um_ano_de_abas_no_tamanho_real_passa():
+    """12 abas mensais com o porte do molde real não podem esbarrar no teto."""
+    spec = molde.validar_spec(spec_valida(
+        abas=[f"FMS MES {i}" for i in range(1, 13)],
+        setores=[{"nome": f"SETOR {i}"} for i in range(16)],
+        colunas=[f"RUBRICA {i}" for i in range(25)],
+    ))
+    assert len(spec["abas"]) == 12
+
+
+def test_lista_absurda_e_recusada_sem_ser_percorrida():
+    """Blindagem: 200 mil itens gerariam 200 mil mensagens de erro.
+
+    Antes desta guarda, 1,4 MB de pedido viravam 27 MB de resposta e 98 MB de
+    memória — o processo inteiro travava.
+    """
+    problemas = problemas_de(colunas=["CEF"] * (molde.MAX_ITENS_EXAMINADOS + 1))
+    assert len(problemas) == 1
+    assert "muito acima" in problemas[0]
+
+
+def test_limite_normal_de_itens_da_mensagem_precisa():
+    """Entre o limite e o teto de exame, a recusa diz o número exato."""
+    problemas = problemas_de(colunas=[f"RUBRICA {i}" for i in range(molde.MAX_COLUNAS + 10)])
+    assert any(f"Máximo de {molde.MAX_COLUNAS} colunas" in p for p in problemas)
+
+    problemas = problemas_de(setores=[{"nome": f"S{i}"} for i in range(molde.MAX_SETORES + 5)])
+    assert any(f"Máximo de {molde.MAX_SETORES} setores" in p for p in problemas)
+
+    problemas = problemas_de(abas=[f"ABA {i}" for i in range(molde.MAX_ABAS + 3)])
+    assert any(f"Máximo de {molde.MAX_ABAS} abas" in p for p in problemas)
+
+
+def test_caractere_de_controle_e_recusado():
+    assert any("controle" in p for p in problemas_de(colunas=["ARSEM\x07CEF"]))
+
+
+def test_aba_com_apostrofo_nas_pontas_e_recusada():
+    assert any("apóstrofo" in p for p in problemas_de(abas=["'MOLDE'"]))
+
+
+def test_setor_aceita_texto_simples_alem_de_objeto():
+    """Colar uma lista manda strings; a tela manda {nome, apelido}."""
+    spec = molde.validar_spec(spec_valida(setores=["ADMINISTRATIVO", {"nome": "ACS"}]))
+    assert spec["setores"] == [
+        {"nome": "ADMINISTRATIVO", "apelido": ""},
+        {"nome": "ACS", "apelido": ""},
+    ]
+
+
+def test_lista_de_problemas_tem_teto():
+    repetidas = ["CEF"] * (molde.MAX_ITENS_EXAMINADOS - 50)
+    problemas = problemas_de(colunas=repetidas)
+    assert len(problemas) == molde.MAX_PROBLEMAS + 1
+    assert problemas[-1].startswith("… e mais")
 
 
 def test_todos_os_problemas_vem_de_uma_vez():
@@ -220,6 +287,32 @@ def test_um_unico_tipo_de_folha_funciona():
     assert set(bloco["linhas_tipo"]) == {"Mensal"}
 
 
+def test_conferir_concorda_com_construir():
+    """A prévia é o caminho rápido — não pode ser um veredito diferente.
+
+    `conferir` dispensa estilos e confere uma aba só; o que o motor enxerga
+    tem de ser exatamente o mesmo que no arquivo entregue.
+    """
+    entrada = spec_valida(abas=["JANEIRO", "FEVEREIRO"])
+    spec_rapida, div_rapidas = molde.conferir(entrada)
+    spec_cheia, _wb, div_cheias = molde.construir(entrada)
+    assert spec_rapida == spec_cheia
+    assert div_rapidas == div_cheias == []
+
+
+def test_workbook_sem_estilo_tem_o_mesmo_conteudo():
+    spec = molde.validar_spec(spec_valida())
+    com = molde.gerar_workbook(spec)["MOLDE"]
+    sem = molde.gerar_workbook(spec, com_estilo=False)["MOLDE"]
+
+    assert preenchimento.listar_colunas_modelo(com) == preenchimento.listar_colunas_modelo(sem)
+    blocos_com = preenchimento.localizar_blocos_setores(com)
+    blocos_sem = preenchimento.localizar_blocos_setores(sem)
+    assert [b["setor"] for b in blocos_com] == [b["setor"] for b in blocos_sem]
+    assert [b["linhas_tipo"] for b in blocos_com] == [b["linhas_tipo"] for b in blocos_sem]
+    assert [b["linha_total"] for b in blocos_com] == [b["linha_total"] for b in blocos_sem]
+
+
 def test_verificacao_denuncia_molde_adulterado():
     # Se alguém quebrar a geração, a verificação tem de acusar — é a rede de
     # segurança que autoriza a gravação.
@@ -282,6 +375,27 @@ def test_extrair_do_modelo_sintetico_do_conftest(modelo):
     assert "PREVIBELOS" in spec["colunas"]
     assert "TOTAL DO EVENTO" not in spec["colunas"]
     assert spec["opcoes"]["coluna_total_evento"] is True
+
+
+def test_extrair_de_planilha_so_com_conferencia_falha_com_motivo(tmp_path):
+    from openpyxl import Workbook
+    wb = Workbook()
+    wb.active.title = "CONFERÊNCIA_AUTOMAÇÃO"
+    caminho = tmp_path / "so_conferencia.xlsx"
+    wb.save(caminho)
+    with pytest.raises(molde.ErroDeMolde) as erro:
+        molde.extrair_spec(caminho)
+    assert any("conferência" in p for p in erro.value.problemas)
+
+
+def test_verificacao_aponta_setor_que_sumiu():
+    spec, wb, _ = molde.construir(spec_valida())
+    ws = wb["MOLDE"]
+    # Apaga o rótulo "Tipo" do 2º bloco: sem ele o motor não enxerga o bloco.
+    bloco = preenchimento.localizar_blocos_setores(ws)[1]
+    ws.cell(row=bloco["linha_cabecalho"], column=1).value = None
+    divergencias = molde.verificar_workbook(wb, spec)
+    assert divergencias and "ausente" in divergencias[0]
 
 
 def test_extrair_de_planilha_sem_blocos_falha_com_motivo(tmp_path):

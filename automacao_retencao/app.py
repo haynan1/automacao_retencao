@@ -303,7 +303,7 @@ def molde_previa(slug):
     """Valida o desenho e devolve a prévia — sem gravar nada em disco."""
     _perfil_ou_404(slug)
     try:
-        spec, _wb, divergencias = molde.construir(_spec_do_pedido())
+        spec, divergencias = molde.conferir(_spec_do_pedido())
     except molde.ErroDeMolde as exc:
         return jsonify({"ok": False, "problemas": exc.problemas, "divergencias": []}), 200
     except Exception as exc:  # noqa: BLE001

@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import logging
 import re
+from functools import lru_cache
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -49,12 +50,27 @@ ROTULO_TOTAL_EVENTO = "TOTAL DO EVENTO"
 ROTULO_TOTAL_GERAL = "TOTAL GERAL"
 LINHA_SECAO = "LANÇAMENTO DAS RETENÇÕES POR SETOR — BASE ZERADA"
 
-# Limites de sanidade. Nao sao burocracia: um pedido com 24 abas x 200 setores
-# x 200 colunas geraria milhoes de celulas e derrubaria o processo.
+# Limites de sanidade, calibrados por medicao — nao por chute. Referencia: o
+# molde real da secretaria tem 16 setores x 23 colunas em 2 abas (~2,9 mil
+# celulas), conferido em 27 ms e gravado em 175 ms.
+#
+#   MAX_BLOCO_CELULAS limita setores x colunas de UMA aba. E o que pesa na
+#   previa, que roda a cada digitacao: 6 mil mantem a resposta perto de 1 s.
+#   MAX_CELULAS limita o arquivo inteiro. E o que pesa na gravacao, acao
+#   pontual: 100 mil mantem a escrita abaixo de ~8 s.
 MAX_ABAS = 24
 MAX_SETORES = 200
 MAX_COLUNAS = 200
-MAX_CELULAS = 300_000
+MAX_BLOCO_CELULAS = 6_000
+MAX_CELULAS = 100_000
+
+# Teto de itens que chegam a ser examinados um a um. Sem ele, uma lista com
+# 200 mil repeticoes gerava 200 mil mensagens de erro — 1,4 MB de pedido
+# viravam 27 MB de resposta e 98 MB de memoria. Acima disto a lista e recusada
+# inteira, sem ser percorrida.
+MAX_ITENS_EXAMINADOS = 500
+# Ninguem corrige quarenta pontos de uma vez; alem disso e ruido.
+MAX_PROBLEMAS = 40
 
 _LIMITE_TEXTO = 200
 _LIMITE_ABA = 31  # limite do proprio Excel
@@ -110,6 +126,22 @@ def _checar_texto(rotulo: str, texto: str, problemas: list[str]) -> None:
         problemas.append(f"{rotulo}: contém caractere de controle não suportado pelo Excel.")
 
 
+def _itens_examinaveis(bruto, rotulo: str, problemas: list[str]) -> list | None:
+    """Devolve a lista a examinar, ou None se ela for grande demais para isso.
+
+    Recusar sem percorrer e o que impede uma lista absurda de virar uma
+    avalanche de mensagens de erro.
+    """
+    itens = bruto if isinstance(bruto, list) else []
+    if len(itens) > MAX_ITENS_EXAMINADOS:
+        problemas.append(
+            f"{rotulo}: {len(itens)} itens recebidos — muito acima do que um molde comporta. "
+            "Revise a lista antes de enviar."
+        )
+        return None
+    return itens
+
+
 def spec_em_branco(nome_secretaria: str = "") -> dict:
     """Folha em branco: um esqueleto valido para comecar do zero na tela."""
     return {
@@ -130,9 +162,13 @@ def spec_em_branco(nome_secretaria: str = "") -> dict:
 
 
 def _validar_abas(bruto, problemas: list[str]) -> list[str]:
+    itens = _itens_examinaveis(bruto, "Abas", problemas)
+    if itens is None:
+        return []
+
     abas: list[str] = []
     vistas: dict[str, str] = {}
-    for item in bruto if isinstance(bruto, list) else []:
+    for item in itens:
         nome = _texto(item, _LIMITE_ABA)
         if not nome:
             continue
@@ -165,9 +201,13 @@ def _validar_abas(bruto, problemas: list[str]) -> list[str]:
 
 
 def _validar_colunas(bruto, problemas: list[str]) -> list[str]:
+    itens = _itens_examinaveis(bruto, "Colunas de rubrica", problemas)
+    if itens is None:
+        return []
+
     colunas: list[str] = []
     vistas: dict[str, str] = {}
-    for item in bruto if isinstance(bruto, list) else []:
+    for item in itens:
         nome = _texto(item)
         if not nome:
             continue
@@ -200,9 +240,13 @@ def _validar_colunas(bruto, problemas: list[str]) -> list[str]:
 
 
 def _validar_setores(bruto, com_total_bloco: bool, problemas: list[str]) -> list[dict]:
+    itens = _itens_examinaveis(bruto, "Setores", problemas)
+    if itens is None:
+        return []
+
     setores: list[dict] = []
     vistos: dict[str, str] = {}
-    for item in bruto if isinstance(bruto, list) else []:
+    for item in itens:
         if isinstance(item, dict):
             nome = _texto(item.get("nome"))
             apelido = _texto(item.get("apelido"), 60)
@@ -271,6 +315,36 @@ def contar_celulas(spec: dict) -> int:
     return len(spec["abas"]) * linhas * colunas
 
 
+def _mil(n: int) -> str:
+    return f"{n:,}".replace(",", ".")
+
+
+def _problemas_de_tamanho(spec: dict) -> list[str]:
+    """Recusa moldes que travariam a tela ou a gravacao.
+
+    Separa as duas grandezas porque elas doem em momentos diferentes: o bloco
+    (setores x colunas) pesa na previa, que roda a cada tecla; o total de
+    celulas pesa na gravacao do arquivo.
+    """
+    problemas: list[str] = []
+
+    bloco = len(spec["setores"]) * len(spec["colunas"])
+    if bloco > MAX_BLOCO_CELULAS:
+        problemas.append(
+            f"{len(spec['setores'])} setores × {len(spec['colunas'])} colunas dão "
+            f"{_mil(bloco)} células por aba, acima do limite de {_mil(MAX_BLOCO_CELULAS)}. "
+            "Reduza setores ou colunas."
+        )
+
+    celulas = contar_celulas(spec)
+    if celulas > MAX_CELULAS:
+        problemas.append(
+            f"O molde inteiro ficaria com {_mil(celulas)} células, acima do limite de "
+            f"{_mil(MAX_CELULAS)}. Reduza a quantidade de abas."
+        )
+    return problemas
+
+
 def validar_spec(bruto: dict) -> dict:
     """Normaliza e valida a spec vinda da interface.
 
@@ -306,16 +380,19 @@ def validar_spec(bruto: dict) -> dict:
     }
 
     if not problemas:
-        celulas = contar_celulas(spec)
-        if celulas > MAX_CELULAS:
-            problemas.append(
-                f"O molde ficaria com {celulas:,} células — acima do limite de {MAX_CELULAS:,}. "
-                "Reduza abas, setores ou colunas.".replace(",", ".")
-            )
+        problemas.extend(_problemas_de_tamanho(spec))
 
     if problemas:
-        raise ErroDeMolde(problemas)
+        raise ErroDeMolde(_resumir(problemas))
     return spec
+
+
+def _resumir(problemas: list[str]) -> list[str]:
+    """Corta a lista de problemas num tamanho que alguem consegue ler."""
+    if len(problemas) <= MAX_PROBLEMAS:
+        return problemas
+    restantes = len(problemas) - MAX_PROBLEMAS
+    return problemas[:MAX_PROBLEMAS] + [f"… e mais {_mil(restantes)} ponto(s) do mesmo tipo."]
 
 
 # ---------------------------------------------------------------------------
@@ -429,7 +506,14 @@ def _linhas_layout(spec: dict) -> list[dict]:
 # Geracao do .xlsx
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=None)
 def _estilo(papel: str) -> tuple[Font, PatternFill | None, Alignment]:
+    """Estilos por papel, construidos uma unica vez.
+
+    openpyxl aceita o mesmo objeto de estilo em varias celulas. Sem este
+    cache, um molde de 280 mil celulas alocava 280 mil trincas Font/Fill/
+    Alignment — e levava quase um minuto para ser gerado.
+    """
     branco_bold = Font(name="Calibri", size=10, bold=True, color="FFFFFFFF")
     if papel == "titulo":
         return (Font(name="Calibri", size=16, bold=True, color="FFFFFFFF"),
@@ -470,15 +554,25 @@ def _estilo(papel: str) -> tuple[Font, PatternFill | None, Alignment]:
             Alignment(horizontal="left", vertical="center"))
 
 
-def _escrever_aba(ws, spec: dict, linhas: list[dict]) -> None:
+def _escrever_aba(ws, spec: dict, linhas: list[dict], com_estilo: bool = True) -> None:
+    """Escreve a aba. Sem estilo, sai o mesmo conteudo — so mais rapido.
+
+    O motor de preenchimento le apenas `.value` e a malha de mesclagens; fonte,
+    cor e formato nao mudam uma virgula do que ele enxerga. Por isso a
+    verificacao dispensa os estilos, e so o arquivo entregue os recebe.
+    """
     n_cols = len(linhas[0]["celulas"])
     ultima_coluna = get_column_letter(n_cols)
 
     for linha in linhas:
         for indice, celula in enumerate(linha["celulas"], start=1):
-            alvo = ws.cell(row=linha["n"], column=indice)
             texto = celula["texto"]
+            if texto == "" and not com_estilo:
+                continue  # celula vazia sem estilo nao precisa nem existir
+            alvo = ws.cell(row=linha["n"], column=indice)
             alvo.value = texto if texto != "" else None
+            if not com_estilo:
+                continue
             fonte, preenchido, alinhamento = _estilo(celula["papel"])
             alvo.font = fonte
             if preenchido is not None:
@@ -490,6 +584,10 @@ def _escrever_aba(ws, spec: dict, linhas: list[dict]) -> None:
         if linha["mesclar"] and n_cols > 1:
             ws.merge_cells(f"A{linha['n']}:{ultima_coluna}{linha['n']}")
 
+    if not com_estilo:
+        return
+
+    for linha in linhas:
         if linha["papel"] == "titulo":
             ws.row_dimensions[linha["n"]].height = 22
         elif linha["papel"] in ("secao", "cabecalho"):
@@ -508,13 +606,13 @@ def _escrever_aba(ws, spec: dict, linhas: list[dict]) -> None:
     ws.freeze_panes = "B6"
 
 
-def gerar_workbook(spec: dict) -> Workbook:
+def gerar_workbook(spec: dict, com_estilo: bool = True) -> Workbook:
     """Monta o .xlsx completo a partir de uma spec ja validada."""
     linhas = _linhas_layout(spec)
     wb = Workbook()
     wb.remove(wb.active)
     for nome in spec["abas"]:
-        _escrever_aba(wb.create_sheet(title=nome), spec, linhas)
+        _escrever_aba(wb.create_sheet(title=nome), spec, linhas, com_estilo)
     preenchimento.preservar_formulas(wb)
     return wb
 
@@ -583,10 +681,26 @@ def _primeira_diferenca(lidos: list[str], esperados: list[str]) -> str:
 
 
 def construir(bruto: dict) -> tuple[dict, Workbook, list[str]]:
-    """Valida, gera e verifica em um passo. Devolve (spec, workbook, divergencias)."""
+    """Valida, gera e verifica o arquivo REAL. Para download e gravacao.
+
+    Devolve (spec, workbook estilizado, divergencias).
+    """
     spec = validar_spec(bruto)
     wb = gerar_workbook(spec)
     return spec, wb, verificar_workbook(wb, spec)
+
+
+def conferir(bruto: dict) -> tuple[dict, list[str]]:
+    """Valida e verifica sem produzir o arquivo entregue. Para a previa.
+
+    Dispensa os estilos e confere uma aba so — as demais sao copias da mesma
+    sequencia de linhas. Mantem a garantia (o motor relendo a estrutura) a um
+    custo compativel com rodar a cada tecla digitada.
+    """
+    spec = validar_spec(bruto)
+    amostra = dict(spec, abas=spec["abas"][:1])
+    wb = gerar_workbook(amostra, com_estilo=False)
+    return spec, verificar_workbook(wb, amostra)
 
 
 # ---------------------------------------------------------------------------
