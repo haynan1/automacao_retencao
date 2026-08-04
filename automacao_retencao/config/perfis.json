@@ -4,7 +4,19 @@
     {
       "slug": "saude",
       "nome": "Secretaria da Saúde (FMS)",
-      "deteccao": ["FUNDO MUNICIPAL DE SAUDE", "FMS"]
+      "deteccao": [
+        "FUNDO MUNICIPAL DE SAUDE",
+        "FMS"
+      ]
+    },
+    {
+      "slug": "fundo-municipal-de-educacao",
+      "nome": "Fundo Municipal de Educação (FME)",
+      "deteccao": [
+        "Fundo Municipal de Educação",
+        "FME",
+        "Secretaria Municipal de Educação"
+      ]
     }
   ]
 }
