@@ -1,0 +1,8 @@
+# Dependências de desenvolvimento/testes (não necessárias para rodar o app).
+-r requirements.txt
+pytest==9.0.3
+pytest-cov==7.0.0
+pip-audit==2.9.0
+# Le o PDF gerado para conferir texto e paginacao nos testes: sem isto,
+# so daria para afirmar que o arquivo existe, nao o que ele diz.
+pypdfium2==5.12.1

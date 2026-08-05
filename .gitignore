@@ -20,15 +20,15 @@ ENV/
 !.env.example
 
 # ==== Dados de trabalho do app (nunca versionar arquivos do usuário) ====
-automacao_retencao/uploads/*
-automacao_retencao/outputs/*
-automacao_retencao/logs/*
-!automacao_retencao/uploads/.gitkeep
-!automacao_retencao/outputs/.gitkeep
-!automacao_retencao/logs/.gitkeep
+/uploads/*
+/outputs/*
+/logs/*
+!/uploads/.gitkeep
+!/outputs/.gitkeep
+!/logs/.gitkeep
 
 # ==== Histórico local de operações (SÓ nesta máquina, nunca no GitHub) ====
-automacao_retencao/historico/
+/historico/
 
 # ==== IDE / editores ====
 .idea/

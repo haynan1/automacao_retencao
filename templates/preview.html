@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "_stepper.html" import stepper %}
+{% block title %}Pré-visualização · Retenções FMS{% endblock %}
+{% block steps %}{{ stepper(2) }}{% endblock %}
+
+{% block content %}
+{% if aviso_perfil %}
+<div class="alert-soft-warn p-3 mb-4"><i class="bi bi-exclamation-triangle-fill me-2"></i>{{ aviso_perfil }}</div>
+{% endif %}
+<div class="d-flex align-items-end justify-content-between flex-wrap gap-3 mb-4">
+  <div>
+    <p class="display-eyebrow mb-1">Pré-visualização{% if perfil_nome %} · {{ perfil_nome }}{% endif %}</p>
+    <h1 class="hero" style="font-size: clamp(1.6rem, 3vw, 2.2rem);">O que o sistema identificou</h1>
+  </div>
+  <a href="{{ url_for('mapeamento', sid=sid) }}" class="btn btn-primary btn-lg">
+    Continuar para mapeamento <i class="bi bi-arrow-right ms-2"></i>
+  </a>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Competência</div><div class="v">{{ competencia or '—' }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Lançamentos</div><div class="v mono">{{ qtd_lancamentos }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Lotações</div><div class="v mono">{{ qtd_lotacoes }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat"><div class="k">Rubricas p/ preencher</div><div class="v mono">{{ rubricas|length }}</div></div></div>
+</div>
+
+<div class="section-title mb-2">Folhas → linha da planilha</div>
+<div class="table-wrap mb-4">
+  <div class="table-responsive">
+    <table class="table align-middle">
+      <thead><tr><th>Folha (origem)</th><th>Linha de destino</th><th class="text-end">Valor</th><th class="text-end">Status</th></tr></thead>
+      <tbody>
+        {% for g in grupos_folhas %}
+        <tr>
+          <td class="small">{{ g.rotulo }}</td>
+          <td class="small">{{ g.tipo or '—' }}<div class="text-secondary">{{ g.motivo }}</div></td>
+          <td class="text-end mono small">{{ g.total|moeda }}</td>
+          <td class="text-end">
+            {% if g.status == 'sem_vinculo' %}<span class="chip danger"><i class="bi bi-x-circle"></i> Sem linha</span>
+            {% elif g.status == 'fora_escopo' %}<span class="chip">Ignorada</span>
+            {% elif g.status == 'sugerido' %}<span class="chip warn"><i class="bi bi-magic"></i> Sugerida</span>
+            {% else %}<span class="chip ok"><i class="bi bi-check-circle"></i> Definida</span>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-secondary small">Nenhuma folha detectada.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if lotacoes_nao_mapeadas or rubricas_sem_vinculo or folhas_sem_vinculo %}
+<div class="alert-soft-danger p-3 mb-4">
+  <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle-fill me-2"></i>Precisam de decisão no próximo passo</div>
+  <div class="small">
+    {% if lotacoes_nao_mapeadas %}<span class="me-3">Lotações sem setor: <strong>{{ lotacoes_nao_mapeadas|length }}</strong></span>{% endif %}
+    {% if rubricas_sem_vinculo %}<span class="me-3">Eventos sem coluna: <strong>{{ rubricas_sem_vinculo|length }}</strong></span>{% endif %}
+    {% if folhas_sem_vinculo %}<span>Folhas sem linha: <strong>{{ folhas_sem_vinculo|length }}</strong></span>{% endif %}
+    — itens sem vínculo <strong>não são preenchidos</strong>.
+  </div>
+</div>
+{% endif %}
+
+{% if folhas_sugeridas %}
+<div class="alert-soft-warn p-3 mb-4">
+  <div class="fw-semibold mb-1"><i class="bi bi-magic me-2"></i>Folhas somadas em outra linha</div>
+  <div class="small">
+    {% for nome, qtd in folhas_sugeridas.items() %}<span class="chip warn me-2 mb-1">{{ nome }} · {{ qtd }}×</span>{% endfor %}
+    <div class="mt-2">Estas folhas não têm linha própria nesta planilha e vão somar onde está indicado.
+    Para separá-las, crie a linha no <strong>construtor de molde</strong> ou escolha outro destino no mapeamento.</div>
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="section-title mb-2">Lotações → setor sugerido</div>
+    <div class="table-wrap">
+      <div class="table-responsive">
+        <table class="table align-middle">
+          <thead><tr><th>Lotação (origem)</th><th>Setor</th><th class="text-end">Status</th></tr></thead>
+          <tbody>
+            {% for item in lotacoes_info %}
+            <tr>
+              <td class="small">{{ item.lotacao }}</td>
+              <td>{{ item.sugestao or '—' }}</td>
+              <td class="text-end">
+                {% if item.mapeada %}<span class="chip ok"><i class="bi bi-check-circle"></i> Mapeada</span>
+                {% elif item.sugestao %}<span class="chip warn"><i class="bi bi-magic"></i> Sugerida</span>
+                {% else %}<span class="chip danger"><i class="bi bi-x-circle"></i> Não mapeada</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="section-title mb-2">Rubricas que vão preencher</div>
+    <div class="panel mb-4">
+      {% if rubricas %}
+        <div class="d-flex flex-wrap gap-2">{% for r in rubricas %}<span class="chip ok">{{ r }}</span>{% endfor %}</div>
+      {% else %}<span class="text-secondary">Nenhuma rubrica reconhecida.</span>{% endif %}
+    </div>
+
+    {% if rubricas_sem_vinculo %}
+    <div class="section-title mb-2 text-danger">Sem vínculo (decidir no mapeamento)</div>
+    <div class="panel mb-4">
+      <div class="d-grid gap-2">
+        {% for desc, qtd in rubricas_sem_vinculo.items() %}
+        <div class="d-flex justify-content-between align-items-center small"><span class="text-truncate me-2">{{ desc }}</span><span class="chip danger">{{ qtd }}×</span></div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    {% if rubricas_fora_escopo %}
+    <div class="section-title mb-2">Fora de escopo (ignoradas)</div>
+    <div class="panel">
+      <div class="d-flex flex-wrap gap-2">
+        {% for desc, qtd in rubricas_fora_escopo.items() %}<span class="chip">{{ desc }} · {{ qtd }}×</span>{% endfor %}
+      </div>
+      <hr class="soft my-3">
+      <div class="small text-secondary">Não são retenções para credor (INSS, faltas, pensão). Não preenchem — por decisão, não por erro.</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="mt-4">
+  <a href="{{ url_for('mapeamento', sid=sid) }}" class="btn btn-primary btn-lg">
+    Continuar para mapeamento <i class="bi bi-arrow-right ms-2"></i>
+  </a>
+</div>
+{% endblock %}

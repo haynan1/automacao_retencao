@@ -1,5 +1,0 @@
-# Dependências de desenvolvimento/testes (não necessárias para rodar o app).
--r requirements.txt
-pytest==9.0.3
-pytest-cov==7.0.0
-pip-audit==2.9.0

@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% from "_stepper.html" import stepper %}
+{% block title %}Mapeamento · Retenções FMS{% endblock %}
+{% block steps %}{{ stepper(3) }}{% endblock %}
+
+{% block content %}
+<form action="{{ url_for('processar', sid=sid) }}" method="post" id="form-processar">
+  <div class="d-flex align-items-end justify-content-between flex-wrap gap-3 mb-4">
+    <div>
+      <p class="display-eyebrow mb-1">Mapeamento manual</p>
+      <h1 class="hero" style="font-size: clamp(1.6rem, 3vw, 2.2rem);">Vincule antes de preencher</h1>
+      <p class="lead-muted mt-2">A planilha é uma grade: cada lançamento precisa de um <strong>bloco</strong>, uma <strong>coluna</strong> e uma <strong>linha</strong>. Os três eixos abaixo definem as três coordenadas — tudo com sugestão automática e o motivo à vista. Você só ajusta o que precisar, e as escolhas ficam salvas para os próximos meses.</p>
+    </div>
+  </div>
+
+  <div class="panel-pad panel mb-4">
+    <div class="row g-3 align-items-end">
+      <div class="col-md-5">
+        <label class="section-title d-block mb-2">Aba de destino na planilha</label>
+        <select name="aba_destino" class="form-select" required>
+          {% for aba in abas %}
+          <option value="{{ aba }}" {% if aba == aba_sugerida %}selected{% endif %}>
+            {{ aba }}{% if aba == aba_sugerida %} — sugerida ({{ competencia }}){% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-7">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" name="salvar_mapeamento" id="salvar" checked>
+          <label class="form-check-label small" for="salvar">
+            Aprender e salvar estes vínculos (lotações, eventos e folhas) para os próximos meses
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- EIXO A: Lotação → Setor -->
+  <div class="section-title mb-2"><i class="bi bi-diagram-3 me-1"></i>Eixo 1 · Lotação → Setor</div>
+  <div class="table-wrap mb-4">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr><th style="width:55%">Lotação (relatório de origem)</th><th>Setor de destino</th></tr></thead>
+        <tbody>
+          {% for item in lotacoes_info %}
+          <tr>
+            <td class="small">
+              {{ item.lotacao }}
+              {% if not item.mapeada and item.sugestao %}<span class="chip warn ms-2"><i class="bi bi-magic"></i> sugerido</span>
+              {% elif not item.mapeada %}<span class="chip danger ms-2">novo</span>{% endif %}
+            </td>
+            <td>
+              <select name="setor_{{ loop.index0 }}" class="form-select form-select-sm">
+                <option value="">— ignorar esta lotação —</option>
+                {% for setor in setores %}
+                <option value="{{ setor }}" {% if item.sugestao == setor %}selected{% endif %}>{{ setor }}</option>
+                {% endfor %}
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EIXO B: Evento → Coluna do modelo -->
+  <div class="section-title mb-2"><i class="bi bi-link-45deg me-1"></i>Eixo 2 · Evento → Coluna do modelo</div>
+  <p class="text-secondary small mb-2">
+    Um menu por <strong>evento do relatório</strong>, não por rubrica: <em>“INSS”</em> e
+    <em>“INSS do 13º salário”</em> aparecem separados e podem ir para colunas diferentes.
+    A coluna <em>Por quê</em> mostra o critério de cada decisão — o que veio de regra
+    aparece primeiro, para ser conferido antes de virar rotina.
+  </p>
+  <div class="table-wrap mb-4">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr>
+          <th style="width:30%">Evento (relatório)</th>
+          <th style="width:24%">Por quê</th>
+          <th class="text-end">Ocorr.</th>
+          <th class="text-end">Valor</th>
+          <th style="width:26%">Coluna do modelo</th>
+        </tr></thead>
+        <tbody>
+          {% for g in grupos %}
+          <tr>
+            <td class="small">
+              <div>{{ g.rotulo }}</div>
+              {% if g.folhas %}
+              <div class="mt-1">
+                {% for f in g.folhas %}<span class="chip chip-compact me-1">{{ f }}</span>{% endfor %}
+              </div>
+              {% endif %}
+            </td>
+            <td class="small text-secondary">
+              {% if g.status == 'sem_vinculo' %}<span class="chip danger"><i class="bi bi-exclamation-circle"></i> sem vínculo</span>
+              {% elif g.status == 'fora_escopo' %}<span class="chip">fora de escopo</span>
+              {% elif g.status == 'regra' %}<span class="chip warn"><i class="bi bi-magic"></i> regra</span>
+              {% else %}<span class="chip ok"><i class="bi bi-check"></i> definido</span>{% endif %}
+              <div class="mt-1">{{ g.motivo }}</div>
+            </td>
+            <td class="text-end mono small">{{ g.n }}</td>
+            <td class="text-end mono small">{{ g.total|moeda }}</td>
+            <td>
+              <select name="coluna_{{ loop.index0 }}" class="form-select form-select-sm sel-coluna {% if g.status == 'sem_vinculo' %}is-pendente{% endif %}">
+                {% if g.status == 'fora_escopo' %}
+                  <option value="">Manter → fora de escopo (ignorar)</option>
+                {% elif g.coluna %}
+                  <option value="">Manter → {{ g.coluna }}</option>
+                {% else %}
+                  <option value="">— escolher coluna —</option>
+                {% endif %}
+                {% for col in colunas %}
+                <option value="{{ col }}">{{ col }}</option>
+                {% endfor %}
+                <option value="{{ IGNORAR }}">Fora de escopo (não preencher)</option>
+              </select>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- EIXO C: Folha → Linha de tipo -->
+  <div class="section-title mb-2"><i class="bi bi-distribute-vertical me-1"></i>Eixo 3 · Folha → Linha da planilha</div>
+  <p class="text-secondary small mb-2">
+    Cada folha do relatório cai numa <strong>linha</strong> do bloco. Se a planilha tiver uma
+    linha própria de <em>Férias</em> ou <em>Rescisão</em>, ela aparece aqui — e a folha para de
+    somar na mensal. As linhas disponíveis são as que existem no molde
+    {% if tipos %}(<span class="mono">{{ tipos|join(' · ') }}</span>){% endif %};
+    para criar outras, use o <strong>construtor de molde</strong> da secretaria.
+  </p>
+  <div class="table-wrap mb-4">
+    <div class="table-responsive">
+      <table class="table align-middle">
+        <thead><tr>
+          <th style="width:30%">Folha (relatório)</th>
+          <th style="width:24%">Por quê</th>
+          <th class="text-end">Ocorr.</th>
+          <th class="text-end">Valor</th>
+          <th style="width:26%">Linha da planilha</th>
+        </tr></thead>
+        <tbody>
+          {% for g in grupos_folhas %}
+          <tr>
+            <td class="small">
+              <div>{{ g.rotulo }}</div>
+              {% if g.familia and g.familia != g.rotulo %}
+              <div class="mt-1"><span class="chip chip-compact">{{ g.familia }}</span></div>
+              {% endif %}
+            </td>
+            <td class="small text-secondary">
+              {% if g.status == 'sem_vinculo' %}<span class="chip danger"><i class="bi bi-exclamation-circle"></i> sem linha</span>
+              {% elif g.status == 'fora_escopo' %}<span class="chip">não preencher</span>
+              {% elif g.status == 'sugerido' %}<span class="chip warn"><i class="bi bi-magic"></i> sugerido</span>
+              {% else %}<span class="chip ok"><i class="bi bi-check"></i> definido</span>{% endif %}
+              <div class="mt-1">{{ g.motivo }}</div>
+            </td>
+            <td class="text-end mono small">{{ g.n }}</td>
+            <td class="text-end mono small">{{ g.total|moeda }}</td>
+            <td>
+              <select name="tipo_{{ loop.index0 }}" class="form-select form-select-sm sel-coluna {% if g.status == 'sem_vinculo' %}is-pendente{% endif %}">
+                {% if g.status == 'fora_escopo' %}
+                  <option value="">Manter → não preencher</option>
+                {% elif g.tipo %}
+                  <option value="">Manter → {{ g.tipo }}</option>
+                {% else %}
+                  <option value="">— escolher linha —</option>
+                {% endif %}
+                {% for t in tipos %}
+                <option value="{{ t }}">{{ t }}</option>
+                {% endfor %}
+                <option value="{{ IGNORAR }}">Não preencher (ignorar esta folha)</option>
+              </select>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-secondary small">Nenhuma folha detectada no relatório.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+    <a href="{{ url_for('preview', sid=sid) }}" class="btn btn-outline-light">
+      <i class="bi bi-arrow-left me-1"></i>Voltar à pré-visualização
+    </a>
+    <button type="submit" class="btn btn-primary btn-lg" id="btn-proc">
+      <span class="label"><i class="bi bi-gear-fill me-2"></i>Processar e preencher</span>
+      <span class="loading d-none"><span class="spinner-border spinner-border-sm me-2"></span>Preenchendo planilha…</span>
+    </button>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Destaca em vermelho selects pendentes até o usuário escolher.
+  document.querySelectorAll('.sel-coluna.is-pendente').forEach(sel => {
+    const paint = () => sel.style.borderColor = sel.value ? '' : 'var(--danger)';
+    paint(); sel.addEventListener('change', paint);
+  });
+  document.getElementById('form-processar').addEventListener('submit', () => {
+    const btn = document.getElementById('btn-proc');
+    btn.disabled = true;
+    btn.querySelector('.label').classList.add('d-none');
+    btn.querySelector('.loading').classList.remove('d-none');
+  });
+</script>
+{% endblock %}
