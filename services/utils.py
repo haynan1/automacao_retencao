@@ -61,14 +61,27 @@ def _limpar_antigos(pasta: Path, max_horas: float, manter: set[str] = frozenset(
 
 
 def limpar_temporarios(uploads_horas: float = 24, sessoes_horas: float = 24,
-                       outputs_horas: float = 24 * 7) -> None:
-    """Faz uma limpeza de retenção: uploads (PII) e sessões em 24h, saídas em 7 dias.
+                       outputs_horas: float | None = None) -> None:
+    """Limpeza de retencao. Idempotente — pensada para rodar no startup do app.
 
-    Idempotente e tolerante a falhas — pensada para rodar no startup do app.
+    A assimetria e deliberada:
+
+    * **uploads e sessoes saem em 24h.** A Listagem de Eventos enviada tem
+      nome, matricula e CPF de cada servidor, e a sessao carrega os
+      lancamentos lidos dela. Guardar isso depois que o trabalho terminou e
+      risco puro, sem contrapartida.
+    * **as saidas ficam.** A planilha preenchida e o produto: vai anexada a
+      processo, e conferida meses depois quando alguem questiona um valor.
+      Apagar por idade destruiria exatamente o que o app existe para produzir
+      — e o historico continuaria listando um arquivo que nao existe mais.
+
+    `outputs_horas=None` significa "nunca varrer" (o padrao). Passar um numero
+    de horas volta a varrer; e o que os testes usam para exercitar a limpeza.
     """
     n = (_limpar_antigos(UPLOADS_DIR, uploads_horas)
-         + _limpar_antigos(SESSIONS_DIR, sessoes_horas)
-         + _limpar_antigos(OUTPUTS_DIR, outputs_horas))
+         + _limpar_antigos(SESSIONS_DIR, sessoes_horas))
+    if outputs_horas is not None:
+        n += _limpar_antigos(OUTPUTS_DIR, outputs_horas)
     if n:
         configurar_logs().info("Limpeza de temporários: %d arquivo(s) removido(s).", n)
 
@@ -123,10 +136,48 @@ def formatar_moeda(valor) -> str:
     return f"R$ {sinal}{'.'.join(grupos)},{decimais}"
 
 
-def gerar_nome_saida(prefixo: str = "RETENCAO_PREENCHIDA") -> str:
-    """Nome padronizado do arquivo final: PREFIXO_YYYYMMDD_HHMMSS.xlsx."""
+def recortar_serie(itens, top: int) -> list:
+    """Recorte legivel de uma serie para DESENHAR: os `top` maiores e "outras".
+
+    A tabela mostra tudo; so o grafico corta — acima de uma duzia de
+    categorias as legendas se sobrepoem e o desenho para de comunicar. O
+    excedente vira uma categoria unica, entao a soma do grafico continua
+    igual a da tabela.
+
+    Mora aqui pelo mesmo motivo que `formatar_moeda`: as duas superficies que
+    desenham (o grafico do .xlsx, em services/relatorio, e os do PDF, em
+    services/pdf_kit) precisam da MESMA regra, e nenhuma das duas pode
+    importar a outra — uma nao conhece reportlab, a outra nao conhece o
+    compilado do historico. Duas copias divergiriam no dia em que alguem
+    mexesse no teto de uma delas.
+    """
+    itens = list(itens)
+    if len(itens) <= top:
+        return itens
+    resto = sum((Decimal(str(valor)) for _rotulo, valor in itens[top:]), Decimal("0.00"))
+    return itens[:top] + [(f"outras ({len(itens) - top})", resto)]
+
+
+def gerar_nome_saida(prefixo: str = "RETENCAO_PREENCHIDA", pasta: Path | None = None) -> str:
+    """Nome padronizado do arquivo final: PREFIXO_YYYYMMDD_HHMMSS.xlsx.
+
+    Se o nome ja existir na pasta, ganha um sufixo curto. O carimbo tem
+    precisao de SEGUNDO: duas operacoes processadas dentro do mesmo segundo
+    geravam o mesmo nome, e a segunda sobrescrevia a primeira em silencio —
+    com o historico listando duas operacoes que apontavam para um arquivo so.
+
+    Enquanto as saidas expiravam em dias, isso passava despercebido. Agora
+    elas ficam para sempre (ver `limpar_temporarios`), e perder uma planilha
+    ja entregue e o pior defeito que este app poderia ter.
+    """
     carimbo = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{prefixo}_{carimbo}.xlsx"
+    destino = OUTPUTS_DIR if pasta is None else pasta
+    nome = f"{prefixo}_{carimbo}.xlsx"
+    tentativas = 0
+    while (destino / nome).exists() and tentativas < 20:
+        tentativas += 1
+        nome = f"{prefixo}_{carimbo}_{uuid.uuid4().hex[:6]}.xlsx"
+    return nome
 
 
 # ---------------------------------------------------------------------------
@@ -143,13 +194,25 @@ def gerar_nome_saida(prefixo: str = "RETENCAO_PREENCHIDA") -> str:
 #   * ler tolerando ausencia e corrupcao — um JSON quebrado nao pode derrubar
 #     o processamento do mes; ele volta ao padrao e o log registra o motivo.
 
-def gravar_json(caminho: Path, dados) -> None:
-    """Grava JSON de forma atomica (temporario + troca)."""
+def gravar_texto(caminho: Path, texto: str) -> None:
+    """Grava texto de forma atomica (temporario + troca).
+
+    Vale para todo arquivo que e REESCRITO inteiro — o historico ao remover
+    uma operacao, um retrato. `write_text` trunca o arquivo antes de escrever:
+    uma queda de energia no meio nao deixa o conteudo antigo, deixa um arquivo
+    pela metade. Com temporario + `os.replace`, ou o arquivo e o novo, ou
+    continua sendo o antigo. Nunca um terco de cada.
+    """
     caminho.parent.mkdir(parents=True, exist_ok=True)
     temporario = caminho.with_suffix(caminho.suffix + ".tmp")
     with temporario.open("w", encoding="utf-8") as fh:
-        json.dump(dados, fh, ensure_ascii=False, indent=2)
+        fh.write(texto)
     os.replace(temporario, caminho)
+
+
+def gravar_json(caminho: Path, dados) -> None:
+    """Grava JSON de forma atomica (temporario + troca)."""
+    gravar_texto(caminho, json.dumps(dados, ensure_ascii=False, indent=2))
 
 
 def ler_json(caminho: Path, padrao, descricao: str = ""):

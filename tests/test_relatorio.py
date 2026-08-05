@@ -22,7 +22,7 @@ from decimal import Decimal
 import pytest
 from openpyxl import load_workbook
 
-from services import relatorio, relatorio_pdf
+from services import pdf_kit, relatorio, relatorio_pdf
 from services.utils import formatar_moeda
 
 _COMPLETA = {
@@ -399,12 +399,12 @@ def test_estorno_nao_e_escondido_pelo_grafico():
                 "itens": [("A", Decimal("100.00")), ("ESTORNO", Decimal("-50.00"))],
                 "total": Decimal("50.00"), "sem_detalhe": 0,
                 "valor_sem_detalhe": Decimal("0.00")}
-    desenho = relatorio_pdf._grafico_barras(dimensao["itens"])
+    desenho = pdf_kit.grafico_barras(dimensao["itens"])
     grafico = desenho.contents[0]
     assert grafico.valueAxis.valueMin is None, "eixo fixo em zero esconderia o estorno"
 
     # Só positivo: aí sim ancora em zero, para a leitura não ser distorcida.
-    desenho = relatorio_pdf._grafico_barras([("A", Decimal("100.00"))])
+    desenho = pdf_kit.grafico_barras([("A", Decimal("100.00"))])
     assert desenho.contents[0].valueAxis.valueMin == 0
 
 
@@ -417,7 +417,7 @@ def test_tipo_com_valor_negativo_deixa_de_ser_pizza():
                "itens": [("Mensal", Decimal("100.00")), ("Ajuste", Decimal(valor))],
                "total": Decimal("100.00"), "sem_detalhe": 0,
                "valor_sem_detalhe": Decimal("0.00")}
-        partes = relatorio_pdf._dimensao(dim, relatorio_pdf._estilos())
+        partes = relatorio_pdf._dimensao(dim, pdf_kit.estilos())
         return [f for parte in partes for f in getattr(parte, "_content", [parte])]
 
     def _tem_pizza(elementos):

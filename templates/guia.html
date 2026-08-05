@@ -59,7 +59,7 @@
       </div>
       <div class="flow-panel" data-step="4">
         <h4><i class="bi bi-check2-circle me-2 text-info"></i>Resultado</h4>
-        <p class="text-secondary">Você vê a <strong>reconciliação</strong> (bate ao centavo ou avisa), os totais e as <strong>pendências</strong>, e baixa o XLSX. Abra no Excel para as fórmulas recalcularem. Tudo fica no <strong>histórico</strong> local.</p>
+        <p class="text-secondary">Você vê a <strong>reconciliação</strong> (bate ao centavo ou avisa), os totais e as <strong>pendências</strong>. Baixa dois arquivos: o <strong>XLSX preenchido</strong>, para abrir no Excel, e a <strong>conferência em PDF</strong> — a mesma tela num documento pronto para imprimir ou anexar ao processo. Tudo fica no <strong>histórico</strong> local, sem prazo para expirar.</p>
       </div>
     </div>
   </div>
@@ -70,25 +70,27 @@
   <p class="section-title mb-2">A garantia central</p>
   <h2 class="h4 mb-3" style="font-weight:700;">Reconciliação: cada centavo é rastreado</h2>
   <div class="panel-pad panel">
-    <p class="mono mb-3" style="color:var(--muted);">Total lido = Preenchido + Fora de escopo + Pendente</p>
+    <p class="mono mb-3" style="color:var(--muted);">Total lido = Preenchido + Sem lugar na planilha + Fora de escopo + Pendente</p>
     <div class="recon-track" id="recon">
-      <div class="recon-seg a" data-w="88"><span class="recon-seg-label">Preenchido</span></div>
+      <div class="recon-seg a" data-w="84"><span class="recon-seg-label">Preenchido</span></div>
+      <div class="recon-seg d is-narrow" data-w="4"><span class="recon-seg-label">Sem lugar</span></div>
       <div class="recon-seg b is-narrow" data-w="6"><span class="recon-seg-label">Fora de escopo</span></div>
       <div class="recon-seg c is-narrow" data-w="6"><span class="recon-seg-label">Pendente</span></div>
     </div>
     <div class="recon-legend">
       <span><span class="dot" style="background:#22c55e"></span><strong>Preenchido</strong> — lançado na planilha</span>
+      <span><span class="dot" style="background:#f59e0b"></span><strong>Sem lugar na planilha</strong> — o molde não tem a linha ou a coluna para aquele valor</span>
       <span><span class="dot" style="background:#64748b"></span><strong>Fora de escopo</strong> — não é retenção (INSS, faltas, pensão)</span>
       <span><span class="dot" style="background:#f87171"></span><strong>Pendente</strong> — sem vínculo ou setor não mapeado</span>
     </div>
-    <p class="text-secondary small mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Proporções ilustrativas. Se a soma não fechar com o total lido, a tela de resultado avisa — nada some silenciosamente.</p>
+    <p class="text-secondary small mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Proporções ilustrativas. As quatro parcelas aparecem na tela de resultado e no PDF exatamente com estes nomes — somadas, dão o total lido. Se não fecharem, o sistema avisa: nada some silenciosamente.</p>
   </div>
 </section>
 
 <!-- CONCEITOS -->
 <section class="reveal mb-5">
   <p class="section-title mb-2">Conceitos-chave</p>
-  <h2 class="h4 mb-4" style="font-weight:700;">Oito ideias que explicam tudo</h2>
+  <h2 class="h4 mb-4" style="font-weight:700;">Dez ideias que explicam tudo</h2>
   <div class="row g-3">
     {% set conceitos = [
       ("bi-building", "Secretaria (perfil)", "Cada secretaria tem molde e vínculos próprios, isolados. Você escolhe no início — o sistema até sugere pela Listagem."),
@@ -98,8 +100,9 @@
       ("bi-distribute-vertical", "Eixo 3 · Folha → Linha", "Cada folha cai numa linha do bloco. Se o molde tiver linha de Férias, as férias param de somar na mensal."),
       ("bi-shield-x", "Fora de escopo", "Rubricas que não são retenção (INSS, faltas, pensão) ficam de fora por decisão, não por erro."),
       ("bi-mortarboard", "Aprendizado", "Os vínculos ficam salvos por secretaria. No mês seguinte já vêm prontos — o esforço cai a quase zero."),
-      ("bi-clock-history", "Histórico local", "Todo processamento é registrado só nesta máquina (nunca no GitHub). Você pode baixar de novo ou apagar."),
-      ("bi-calculator", "Reconciliação", "Total lido = preenchido + fora de escopo + pendente, com um balde por motivo. Fecha ao centavo ou avisa.")
+      ("bi-clock-history", "Histórico local", "Todo processamento é registrado só nesta máquina (nunca no GitHub). A planilha e a conferência ficam guardadas — não expiram — e você rebaixa quando quiser."),
+      ("bi-file-earmark-pdf", "Conferência em PDF", "A tela de resultado vira documento: reconciliação, totais, o motivo de cada destino e as pendências. Para imprimir, assinar ou anexar ao processo."),
+      ("bi-calculator", "Reconciliação", "Total lido = preenchido + sem lugar na planilha + fora de escopo + pendente, com um balde por motivo. Fecha ao centavo ou avisa.")
     ] %}
     {% for ico, titulo, desc in conceitos %}
     <div class="col-md-6 col-lg-3">
@@ -124,7 +127,8 @@
       ("Analise", "Clique em Analisar. Confira competência, lotações e eventos reconhecidos — e os avisos do que ainda não tem vínculo."),
       ("Confirme os vínculos", "Na tela de mapeamento, ajuste lotação → setor e evento → coluna nos menus. Deixe “fora de escopo” o que não é retenção."),
       ("Processe e confira", "Clique em Processar. Veja a reconciliação e as pendências. Se algo não fechar, o sistema aponta onde."),
-      ("Baixe e abra no Excel", "Baixe o XLSX preenchido e abra no Excel para as fórmulas e o dashboard recalcularem automaticamente.")
+      ("Baixe e abra no Excel", "Baixe o XLSX preenchido e abra no Excel para as fórmulas e o dashboard recalcularem automaticamente."),
+      ("Guarde a conferência em PDF", "Baixe também a conferência em PDF — é o comprovante do que foi lançado e por quê. Ela fica no histórico e pode ser rebaixada a qualquer momento.")
     ] %}
     {% for titulo, desc in passos %}
     <div class="col-md-6">
@@ -161,6 +165,8 @@
       ("Minhas fórmulas somem?", "Não. Só as células de valor das linhas de tipo são preenchidas. A linha TOTAL e o dashboard mantêm as fórmulas."),
       ("Preciso remapear todo mês?", "Não. Ao salvar, o sistema aprende os vínculos por secretaria — no mês seguinte já vêm resolvidos; você só confirma."),
       ("Meus dados vão para a internet?", "Não. Tudo roda localmente. Uploads, resultados e o histórico ficam só na sua máquina e nunca vão para o GitHub."),
+      ("Para que serve o PDF da conferência?", "É a tela de resultado virada documento: reconciliação, totais por setor, rubrica e linha de folha, o motivo de cada destino e as pendências. Serve para imprimir, assinar ou anexar ao processo. Você baixa na tela de resultado e, depois, a qualquer momento pelo histórico."),
+      ("Os arquivos somem depois de um tempo?", "As planilhas geradas e as conferências ficam guardadas por tempo indeterminado — são o produto do trabalho. Já os arquivos ENVIADOS (a Listagem, que traz nome, matrícula e CPF) são apagados automaticamente 24h depois do processamento: o trabalho já está feito, e guardar dado pessoal além do necessário é risco sem contrapartida."),
       ("Como uso outra secretaria?", "Em “Secretarias”, crie o perfil e defina o molde dela. Os eventos e vínculos ficam isolados por secretaria — sem misturar.")
     ] %}
     {% for q, a in faqs %}

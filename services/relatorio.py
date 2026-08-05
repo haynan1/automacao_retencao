@@ -43,6 +43,7 @@ from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
 from . import estilo_xlsx as estilo
+from .utils import recortar_serie
 
 _ZERO = Decimal("0.00")
 _CENTAVO = Decimal("0.01")
@@ -234,14 +235,11 @@ def compilar(operacoes_brutas: list[dict]) -> dict:
 def para_grafico(dimensao: dict) -> list[tuple[str, Decimal]]:
     """Recorte legível de uma dimensão para desenhar.
 
-    A tabela mostra tudo; aqui o excedente vira uma barra “outras”, para que
-    o desenho continue comunicando sem que a soma mude.
+    A regra vive em `utils.recortar_serie`, uma só para os dois formatos: o
+    gráfico do .xlsx (aqui) e os do PDF cortam no mesmo ponto, senão o mesmo
+    compilado sairia com desenhos diferentes em cada arquivo.
     """
-    itens = dimensao["itens"]
-    if len(itens) <= TOP_GRAFICO:
-        return list(itens)
-    resto = sum((v for _k, v in itens[TOP_GRAFICO:]), _ZERO)
-    return itens[:TOP_GRAFICO] + [(f"outras ({len(itens) - TOP_GRAFICO})", resto)]
+    return recortar_serie(dimensao["itens"], TOP_GRAFICO)
 
 
 def nome_arquivo(extensao: str = "xlsx") -> str:

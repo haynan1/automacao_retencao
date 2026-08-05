@@ -11,11 +11,78 @@
     },
     {
       "slug": "fundo-municipal-de-educacao",
+      "nome": "FUNDEB",
+      "deteccao": [
+        "FUNDEB 30%",
+        "FUNDEB 70%"
+      ]
+    },
+    {
+      "slug": "fundo-municipal-de-educacao-fme",
       "nome": "Fundo Municipal de Educação (FME)",
       "deteccao": [
         "Fundo Municipal de Educação",
         "FME",
         "Secretaria Municipal de Educação"
+      ]
+    },
+    {
+      "slug": "fms-geral",
+      "nome": "FMS - GERAL",
+      "deteccao": [
+        "FUNDO MUNICIPAL DE SAUDE",
+        "FMS"
+      ]
+    },
+    {
+      "slug": "secretaria-de-cultura",
+      "nome": "SECRETARIA DE CULTURA",
+      "deteccao": [
+        "SECRETARIA DE CULTURA",
+        "CULTURA"
+      ]
+    },
+    {
+      "slug": "secretaria-de-meio-ambiente",
+      "nome": "SECRETARIA DE MEIO AMBIENTE",
+      "deteccao": [
+        "SECRETARIA DE MEIO AMBIENTE",
+        "MEIO AMBIENTE"
+      ]
+    },
+    {
+      "slug": "geral",
+      "nome": "GERAL",
+      "deteccao": [
+        "FUNDO MUNICIPAL DE SAUDE",
+        "FMS",
+        "FUNDEB 30%",
+        "FUNDEB 70%",
+        "Fundo Municipal de Educação",
+        "FME",
+        "Secretaria Municipal de Educação",
+        "SECRETARIA DE CULTURA",
+        "CULTURA",
+        "SECRETARIA DE MEIO AMBIENTE",
+        "MEIO AMBIENTE"
+      ]
+    },
+    {
+      "slug": "prefeitura",
+      "nome": "PREFEITURA",
+      "deteccao": [
+        "PREFEITURA MUNICIPAL",
+        "PREFEITURA"
+      ]
+    },
+    {
+      "slug": "assistencia-social",
+      "nome": "ASSISTENCIA SOCIAL (FMAS)",
+      "deteccao": [
+        "ASSISTENCIA SOCIAL",
+        "AÇÃO SOCIAL",
+        "SOCIAL",
+        "FMAS"
       ]
     }
   ]

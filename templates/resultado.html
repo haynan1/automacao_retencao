@@ -10,7 +10,15 @@
     <div class="fw-semibold fs-5"><i class="bi bi-check-circle-fill me-2"></i>Planilha preenchida</div>
     <div class="small mt-1">Competência {{ competencia or '—' }} · aba <strong>{{ resumo.aba_destino }}</strong> · {{ resumo.qtd_celulas }} células lançadas.</div>
   </div>
-  <a href="{{ url_for('download', sid=sid) }}" class="btn btn-primary btn-lg"><i class="bi bi-download me-2"></i>Baixar {{ output_nome }}</a>
+  <div class="d-flex flex-wrap gap-2">
+    {# `text-break`: o nome da saída é uma palavra só, longa, e sem isto o
+       botão vaza para fora da tela no celular em vez de quebrar a linha. #}
+    <a href="{{ url_for('download', sid=sid) }}" class="btn btn-primary btn-lg text-break"><i class="bi bi-download me-2"></i>Baixar {{ output_nome }}</a>
+    <a href="{{ url_for('resultado_pdf', sid=sid) }}" class="btn btn-outline-light btn-lg"
+       title="Conferência desta operação em PDF — pronta para imprimir ou anexar ao processo">
+      <i class="bi bi-file-earmark-pdf me-2"></i>Conferência em PDF
+    </a>
+  </div>
 </div>
 
 <!-- Reconciliação -->
@@ -24,12 +32,17 @@
     {% endif %}
   </div>
   <div class="row g-3">
-    <div class="col-6 col-lg"><div class="stat"><div class="k">Total lido</div><div class="v small mono">{{ rec.total_lido|moeda }}</div></div></div>
-    <div class="col-6 col-lg"><div class="stat"><div class="k">Preenchido</div><div class="v small mono" style="color:var(--success)">{{ rec.total_preenchido|moeda }}</div></div></div>
-    <div class="col-6 col-lg"><div class="stat"><div class="k">Fora de escopo</div><div class="v small mono">{{ (rec.total_fora_escopo + rec.total_folha_fora_escopo)|moeda }}</div></div></div>
-    <div class="col-6 col-lg"><div class="stat"><div class="k">Evento sem coluna</div><div class="v small mono" style="color:{{ 'var(--danger)' if rec.total_sem_vinculo > 0 else 'var(--muted)' }}">{{ rec.total_sem_vinculo|moeda }}</div></div></div>
-    <div class="col-6 col-lg"><div class="stat"><div class="k">Folha sem linha</div><div class="v small mono" style="color:{{ 'var(--danger)' if rec.total_folha_sem_vinculo > 0 else 'var(--muted)' }}">{{ rec.total_folha_sem_vinculo|moeda }}</div></div></div>
-    <div class="col-6 col-lg"><div class="stat"><div class="k">Setor não mapeado</div><div class="v small mono" style="color:{{ 'var(--danger)' if rec.total_setor_nao_mapeado > 0 else 'var(--muted)' }}">{{ rec.total_setor_nao_mapeado|moeda }}</div></div></div>
+    <div class="col-6 col-lg-4 col-xl-3"><div class="stat"><div class="k">Total lido</div><div class="v small mono">{{ rec.total_lido|moeda }}</div></div></div>
+    <div class="col-6 col-lg-4 col-xl-3"><div class="stat"><div class="k">Preenchido</div><div class="v small mono" style="color:var(--success)">{{ rec.total_preenchido|moeda }}</div></div></div>
+    {# 'Sem lugar na planilha' aparece porque `total_preenchido` já vem
+       descontado dele: sem esta linha, somar os cartões daria MENOS que o
+       total lido e a conferência à mão acusaria uma divergência inexistente.
+       Mesma lista da aba de conferência e do PDF (conferencia.LINHAS_RECONCILIACAO). #}
+    <div class="col-6 col-lg-4 col-xl-3"><div class="stat"><div class="k">Sem lugar na planilha</div><div class="v small mono" style="color:{{ 'var(--danger)' if rec.total_estrutura > 0 else 'var(--muted)' }}">{{ rec.total_estrutura|moeda }}</div></div></div>
+    <div class="col-6 col-lg-4 col-xl-3"><div class="stat"><div class="k">Fora de escopo</div><div class="v small mono">{{ (rec.total_fora_escopo + rec.total_folha_fora_escopo)|moeda }}</div></div></div>
+    <div class="col-6 col-lg-4 col-xl-3"><div class="stat"><div class="k">Evento sem coluna</div><div class="v small mono" style="color:{{ 'var(--danger)' if rec.total_sem_vinculo > 0 else 'var(--muted)' }}">{{ rec.total_sem_vinculo|moeda }}</div></div></div>
+    <div class="col-6 col-lg-4 col-xl-3"><div class="stat"><div class="k">Folha sem linha</div><div class="v small mono" style="color:{{ 'var(--danger)' if rec.total_folha_sem_vinculo > 0 else 'var(--muted)' }}">{{ rec.total_folha_sem_vinculo|moeda }}</div></div></div>
+    <div class="col-6 col-lg-4 col-xl-3"><div class="stat"><div class="k">Setor não mapeado</div><div class="v small mono" style="color:{{ 'var(--danger)' if rec.total_setor_nao_mapeado > 0 else 'var(--muted)' }}">{{ rec.total_setor_nao_mapeado|moeda }}</div></div></div>
   </div>
 </div>
 
@@ -153,11 +166,12 @@
 </div></div>
 {% endif %}
 
-<div class="d-flex gap-2 mt-5">
+<div class="d-flex flex-wrap gap-2 mt-5">
   <a href="{{ url_for('download', sid=sid) }}" class="btn btn-primary btn-lg"><i class="bi bi-download me-2"></i>Baixar planilha</a>
+  <a href="{{ url_for('resultado_pdf', sid=sid) }}" class="btn btn-outline-light btn-lg"><i class="bi bi-file-earmark-pdf me-2"></i>Conferência em PDF</a>
   <a href="{{ url_for('index') }}" class="btn btn-outline-light btn-lg"><i class="bi bi-arrow-repeat me-2"></i>Novo processamento</a>
 </div>
-<p class="text-secondary small mt-3"><i class="bi bi-info-circle me-1"></i>Abra o arquivo no Excel para as fórmulas e o dashboard recalcularem automaticamente.</p>
+<p class="text-secondary small mt-3"><i class="bi bi-info-circle me-1"></i>Abra o arquivo no Excel para as fórmulas e o dashboard recalcularem automaticamente. O PDF traz esta mesma conferência — reconciliação, totais, decisões e pendências — pronta para imprimir ou anexar ao processo.</p>
 {% endblock %}
 
 {% block scripts %}

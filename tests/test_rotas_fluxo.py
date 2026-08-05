@@ -258,3 +258,164 @@ def test_modelo_sem_linha_de_tipo_e_recusado_no_inicio(cliente, fazer_listagem, 
     resposta = cliente.post("/analisar", data=dados, content_type="multipart/form-data")
     assert resposta.status_code == 422
     assert "linhas de tipo" in resposta.get_data(as_text=True)
+
+
+# ---------------------------------------------------------------------------
+# A conferência em PDF, na tela de resultado
+# ---------------------------------------------------------------------------
+
+def _processar_ate_o_resultado(cliente, fazer_listagem, fazer_modelo):
+    """Roda o fluxo inteiro e devolve o id da sessão já processada."""
+    listagem = fazer_listagem([
+        (LOT, "MENSAL", "PREVIBELOS", "70.00"),
+        (LOT, "FÉRIAS", "PREVIBELOS", "30.00"),
+    ])
+    modelo = fazer_modelo(["ACS"], ["PREVIBELOS"], ["Mensal", "Férias"])
+    sid = _enviar(cliente, listagem, modelo)
+    resposta = cliente.post(f"/processar/{sid}", data={
+        "aba_destino": "MOLDE", "setor_0": "ACS",
+    })
+    assert resposta.status_code == 302, resposta.data[:400]
+    return sid
+
+
+def test_tela_de_resultado_oferece_os_dois_formatos(cliente, fazer_listagem, fazer_modelo):
+    sid = _processar_ate_o_resultado(cliente, fazer_listagem, fazer_modelo)
+    html = cliente.get(f"/resultado/{sid}").get_data(as_text=True)
+    assert f"/download/{sid}" in html
+    assert f"/resultado/{sid}/pdf" in html
+
+
+def test_baixa_a_conferencia_em_pdf(cliente, fazer_listagem, fazer_modelo):
+    """O PDF sai do MESMO retrato que a tela e a aba da planilha mostram."""
+    import pypdfium2 as pdfium
+
+    from services.utils import formatar_moeda
+
+    sid = _processar_ate_o_resultado(cliente, fazer_listagem, fazer_modelo)
+    resposta = cliente.get(f"/resultado/{sid}/pdf")
+
+    assert resposta.status_code == 200
+    assert resposta.headers["Content-Type"] == "application/pdf"
+    disposicao = resposta.headers["Content-Disposition"]
+    assert "CONFERENCIA_" in disposicao and disposicao.endswith(".pdf")
+    assert resposta.data.startswith(b"%PDF-")
+
+    doc = pdfium.PdfDocument(io.BytesIO(resposta.data))
+    texto = "\n".join(p.get_textpage().get_text_range() for p in doc)
+    resumo = utils.carregar_sessao(sid)["resumo"]
+    assert formatar_moeda(resumo["reconciliacao"]["total_lido"]) in texto
+    assert "CONFERE" in texto
+    assert "PREVIBELOS" in texto and "Férias" in texto
+
+
+def test_pdf_de_sessao_nao_processada_volta_ao_mapeamento(cliente, fazer_listagem, fazer_modelo):
+    """Sem processamento não existe conferência para emitir."""
+    listagem = fazer_listagem([(LOT, "MENSAL", "PREVIBELOS", "10.00")])
+    modelo = fazer_modelo(["ACS"], ["PREVIBELOS"], ["Mensal"])
+    sid = _enviar(cliente, listagem, modelo)
+
+    resposta = cliente.get(f"/resultado/{sid}/pdf")
+    assert resposta.status_code == 302
+    assert resposta.headers["Location"].endswith(f"/mapeamento/{sid}")
+
+
+def test_pdf_de_sessao_inexistente_e_404(cliente):
+    assert cliente.get("/resultado/naoexiste/pdf").status_code == 404
+
+
+def test_sid_com_travessia_nao_le_arquivo_de_fora_da_pasta_de_sessoes(cliente):
+    """O sid entra num caminho de arquivo: não pode virar `../`."""
+    for sid in ("../../config/perfis", "..%2f..%2fconfig%2fperfis",
+                "....//....//config/perfis", "%2e%2e%2f%2e%2e%2fapp"):
+        resposta = cliente.get(f"/resultado/{sid}/pdf")
+        assert resposta.status_code in (404, 308), f"{sid} -> {resposta.status_code}"
+        assert not resposta.data.startswith(b"%PDF-")
+
+
+def test_retrato_corrompido_na_sessao_vira_erro_tratado(cliente, fazer_listagem,
+                                                        fazer_modelo, monkeypatch):
+    """Sessão de outra versão não pode devolver traceback nem derrubar a app."""
+    sid = _processar_ate_o_resultado(cliente, fazer_listagem, fazer_modelo)
+    sessao = utils.carregar_sessao(sid)
+    sessao["resumo"] = "isto não é um retrato"
+    utils.salvar_sessao(sid, sessao)
+
+    resposta = cliente.get(f"/resultado/{sid}/pdf")
+    assert resposta.status_code == 500
+    corpo = resposta.get_data(as_text=True)
+    assert "Traceback" not in corpo and "AttributeError" not in corpo
+    assert "planilha preenchida continua disponível" in corpo
+
+
+def test_nome_de_saida_adulterado_nao_injeta_cabecalho_http(cliente, fazer_listagem,
+                                                            fazer_modelo):
+    """`Content-Disposition` é montado com o nome do arquivo: CRLF ali dentro
+    partiria a resposta em dois."""
+    sid = _processar_ate_o_resultado(cliente, fazer_listagem, fazer_modelo)
+    sessao = utils.carregar_sessao(sid)
+    sessao["output_nome"] = "planilha\r\nSet-Cookie: roubado=1\r\n\r\n.xlsx"
+    utils.salvar_sessao(sid, sessao)
+
+    resposta = cliente.get(f"/resultado/{sid}/pdf")
+    assert resposta.status_code == 200
+    assert "roubado" not in str(resposta.headers)
+    assert "Set-Cookie" not in resposta.headers
+    assert resposta.headers["Content-Disposition"].endswith(".pdf")
+
+
+def test_o_que_fica_para_sempre_nao_tem_dado_pessoal(cliente, fazer_listagem, fazer_modelo):
+    """A contrapartida da permanência.
+
+    A Listagem enviada tem nome, matrícula e CPF de cada servidor e é apagada
+    em 24h. O que FICA — a planilha preenchida, a aba de conferência, o
+    retrato no histórico e o PDF — só pode conter agregados. Se um nome
+    vazasse para cá, ele ficaria na máquina para sempre.
+    """
+    import re
+
+    from services import historico as hist
+
+    listagem = fazer_listagem([(LOT, "MENSAL", "PREVIBELOS", "10.00")])
+    modelo = fazer_modelo(["ACS"], ["PREVIBELOS"], ["Mensal"])
+    sid = _enviar(cliente, listagem, modelo)
+    cliente.post(f"/processar/{sid}", data={"aba_destino": "MOLDE", "setor_0": "ACS"})
+
+    cpf = re.compile(r"\d{3}\.\d{3}\.\d{3}-\d{2}")
+    pessoais = ("SERVIDOR", "funcionario", "matricula")
+
+    permanentes = {
+        "planilha": cliente.get(f"/download/{sid}").data.decode("latin-1"),
+        "pdf": cliente.get(f"/resultado/{sid}/pdf").data.decode("latin-1"),
+    }
+    op = hist.listar_operacoes()[0]
+    permanentes["registro"] = str(op)
+    permanentes["retrato"] = str(hist.carregar_retrato(op["id"]))
+
+    for onde, conteudo in permanentes.items():
+        assert not cpf.search(conteudo), f"CPF encontrado em: {onde}"
+        for termo in pessoais:
+            assert termo.lower() not in conteudo.lower(), f"'{termo}' encontrado em: {onde}"
+
+
+def test_o_arquivo_enviado_com_pii_e_o_unico_que_expira(cliente, fazer_listagem, fazer_modelo):
+    """Prova a assimetria de ponta a ponta: a saída fica, o upload sai."""
+    listagem = fazer_listagem([(LOT, "MENSAL", "PREVIBELOS", "10.00")])
+    modelo = fazer_modelo(["ACS"], ["PREVIBELOS"], ["Mensal"])
+    sid = _enviar(cliente, listagem, modelo)
+    cliente.post(f"/processar/{sid}", data={"aba_destino": "MOLDE", "setor_0": "ACS"})
+
+    saida = Path(utils.carregar_sessao(sid)["output_path"])
+    enviados = list(utils.UPLOADS_DIR.iterdir())
+    assert saida.exists() and enviados
+
+    import os
+    import time
+    velho = time.time() - 30 * 24 * 3600
+    for arq in [saida] + enviados:
+        os.utime(arq, (velho, velho))
+
+    utils.limpar_temporarios()
+
+    assert saida.exists(), "a planilha entregue não pode expirar"
+    assert not any(a.exists() for a in enviados), "o arquivo com PII tem de sair"

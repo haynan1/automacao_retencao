@@ -1,0 +1,60 @@
+{
+  "versao": 1,
+  "titulo": "ASSISTENCIA SOCIAL",
+  "subtitulo": "MODELO DE RETENÇÕES",
+  "abas": [
+    "AÇÃO SOCIAL"
+  ],
+  "colunas": [
+    "ARSEM",
+    "CEF",
+    "IRRF S/ 13º SALÁRIO",
+    "IR",
+    "SINTEGO",
+    "SINDSAUDE",
+    "ITAU",
+    "BRADESCO",
+    "FUNPRECOR",
+    "SINDCASE",
+    "INSS S/ 13º SALÁRIO",
+    "INSS",
+    "IPARV",
+    "FUNPREV",
+    "FUMPRU",
+    "DETERMINAÇÃO JUDICIAL",
+    "EMP. PREV.",
+    "PREVPLAN",
+    "IPASI",
+    "PARAUNAPREV",
+    "BRASILPREV",
+    "PREVJUS",
+    "AURIPREVI",
+    "FUNPRES",
+    "PREVFAINA",
+    "PALMEIRASPREV",
+    "PREVIBELOS",
+    "IPASGO",
+    "IPASGO DEPENDENTES",
+    "BB - BRASIL",
+    "DEVOLUÇÃO DE AD. 13º"
+  ],
+  "setores": [
+    {
+      "nome": "ASSISTENCIA SOCIAL (FMAS)",
+      "apelido": "FMAS"
+    }
+  ],
+  "tipos": [
+    "Mensal",
+    "13º salário",
+    "Férias",
+    "Rescisão",
+    "Complementar"
+  ],
+  "opcoes": {
+    "coluna_total_evento": true,
+    "linha_total_bloco": true,
+    "linha_total_geral": true,
+    "rodape_apelido": true
+  }
+}

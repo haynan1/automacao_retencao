@@ -37,6 +37,7 @@ from werkzeug.utils import secure_filename
 
 from services import (
     conferencia,
+    conferencia_pdf,
     historico,
     mapeador,
     molde,
@@ -81,7 +82,9 @@ app.secret_key = os.environ.get("SECRET_KEY", os.urandom(24).hex())
 
 criar_pastas()
 log = configurar_logs()
-limpar_temporarios()  # retenção: remove uploads/sessões >24h e saídas >7d
+# Retenção: uploads e sessões (que carregam PII do relatório de origem) saem
+# em 24h. As planilhas geradas ficam — são o produto, e vão anexadas a processo.
+limpar_temporarios()
 
 
 @app.before_request
@@ -787,9 +790,12 @@ def processar(sid):
         )
 
         # --- Agregação e preenchimento ---
+        # `escrita`, não `relatorio`: o módulo `relatorio` (compilado do
+        # histórico) está importado neste arquivo, e uma variável local com
+        # aquele nome o esconderia dentro desta função.
         agregados, baldes = conferencia.agregar_lancamentos(lancamentos)
         preenchimento.limpar_area_lancamento(ws, blocos)
-        relatorio = preenchimento.preencher_valores(ws, agregados, blocos)
+        escrita = preenchimento.preencher_valores(ws, agregados, blocos)
 
         # --- Totais, reconciliação e conferência ---
         total_lido = conferencia.calcular_totais_lidos(lancamentos)
@@ -798,11 +804,16 @@ def processar(sid):
         # aqui e juntos na coluna. É esta série que alimenta o detalhamento
         # por evento no relatório consolidado do histórico.
         agregados_tot["por_evento"] = conferencia.totais_por_evento(lancamentos)
-        rec = conferencia.reconciliar(total_lido, baldes, relatorio["pendencias_estrutura"])
+        rec = conferencia.reconciliar(total_lido, baldes, escrita["pendencias_estrutura"])
         pendencias_map = mapeador.detectar_pendencias(lancamentos)
 
-        dados_conf = {
+        # O retrato da operação: UM dicionário, três superfícies. A aba
+        # CONFERÊNCIA_AUTOMAÇÃO dentro da planilha, a tela de resultado e o
+        # PDF da conferência renderizam este mesmo objeto. Nenhuma delas soma
+        # nada por conta própria — por isso não têm como divergir num centavo.
+        retrato = {
             "competencia": dados["competencia"],
+            "perfil_nome": dados.get("perfil_nome"),
             "arquivo_origem": dados["arquivo_origem_nome"],
             "arquivo_modelo": dados["arquivo_modelo_nome"],
             "aba_destino": aba_destino,
@@ -810,15 +821,18 @@ def processar(sid):
             "por_setor": agregados_tot["por_setor"],
             "por_coluna": agregados_tot["por_coluna"],
             "por_tipo": agregados_tot["por_tipo"],
+            "por_evento": agregados_tot["por_evento"],
+            "qtd_celulas": len(escrita["preenchidos"]),
             "decisoes_rubricas": decisoes_rubricas,
             "decisoes_folhas": decisoes_folhas,
             **{chave: pendencias_map[chave] for chave in (
                 "lotacoes_nao_mapeadas", "rubricas_sem_vinculo", "rubricas_fora_escopo",
-                "folhas_sem_vinculo", "folhas_sugeridas", "folhas_fora_escopo",
+                "rubricas_por_regra", "folhas_sem_vinculo", "folhas_sugeridas",
+                "folhas_fora_escopo",
             )},
-            "pendencias_estrutura": relatorio["pendencias_estrutura"],
+            "pendencias_estrutura": escrita["pendencias_estrutura"],
         }
-        conferencia.criar_aba_conferencia(wb, dados_conf)
+        conferencia.criar_aba_conferencia(wb, retrato)
         preenchimento.preservar_formulas(wb)
 
         # --- Salvar saída ---
@@ -831,23 +845,10 @@ def processar(sid):
 
         dados["output_nome"] = nome_saida
         dados["output_path"] = str(caminho_saida)
-        dados["resumo"] = {
-            "aba_destino": aba_destino,
-            "reconciliacao": rec,
-            "por_setor": agregados_tot["por_setor"],
-            "por_coluna": agregados_tot["por_coluna"],
-            "por_tipo": agregados_tot["por_tipo"],
-            "por_evento": agregados_tot["por_evento"],
-            "qtd_celulas": len(relatorio["preenchidos"]),
-            "pendencias_estrutura": relatorio["pendencias_estrutura"],
-            "decisoes_rubricas": decisoes_rubricas,
-            "decisoes_folhas": decisoes_folhas,
-            **{chave: pendencias_map[chave] for chave in (
-                "lotacoes_nao_mapeadas", "rubricas_sem_vinculo", "rubricas_fora_escopo",
-                "rubricas_por_regra", "folhas_sem_vinculo", "folhas_sugeridas",
-                "folhas_fora_escopo",
-            )},
-        }
+        # O nome da planilha só existe depois de salva; o retrato o carrega
+        # para que o PDF diga a qual arquivo aquela conferência pertence.
+        retrato["output_nome"] = nome_saida
+        dados["resumo"] = retrato
         salvar_sessao(sid, dados)
 
         # --- Histórico local (nunca vai para o git) ---
@@ -871,6 +872,10 @@ def processar(sid):
         historico.registrar_operacao({
             "sid": sid,
             "graficos": graficos_hist,
+            # A conferência inteira, para reemitir o PDF meses depois: a
+            # sessão expira em 24h e o retrato é o que o documento desenha.
+            # Vai para um arquivo ao lado do JSONL (ver services/historico).
+            "retrato": retrato,
             "perfil": perfil,
             "perfil_nome": dados.get("perfil_nome"),
             "competencia": dados["competencia"],
@@ -879,7 +884,7 @@ def processar(sid):
             "arquivo_modelo": dados["arquivo_modelo_nome"],
             "output_nome": nome_saida,
             "qtd_lancamentos": len(lancamentos),
-            "qtd_celulas": len(relatorio["preenchidos"]),
+            "qtd_celulas": len(escrita["preenchidos"]),
             "total_lido": rec["total_lido"],
             "total_preenchido": rec["total_preenchido"],
             "total_fora_escopo": fora_escopo,
@@ -894,7 +899,7 @@ def processar(sid):
         })
 
         log.info("Processamento concluído sid=%s células=%d confere=%s saída=%s",
-                 sid, len(relatorio["preenchidos"]), rec["confere"], nome_saida)
+                 sid, len(escrita["preenchidos"]), rec["confere"], nome_saida)
         return redirect(url_for("resultado", sid=sid))
 
     except KeyError as exc:
@@ -944,6 +949,50 @@ def resultado(sid):
     )
 
 
+def _entregar_conferencia(retrato: dict, output_nome, origem: str):
+    """Monta o PDF da conferência e entrega. Duas telas chamam isto.
+
+    Montado em memória e entregue direto: nada é gravado em disco. O retrato
+    já está guardado (na sessão, e no histórico) — o documento é derivado
+    dele, e refazê-lo custa 40 ms. Gravar o PDF criaria uma segunda cópia
+    para manter em dia com o layout.
+    """
+    try:
+        conteudo = conferencia_pdf.montar_pdf(retrato)
+    except Exception as exc:  # noqa: BLE001 — nunca deixar a app cair
+        # O retrato pode ter sido gravado por uma versão anterior, com outra
+        # forma. Isso não pode virar um 500 cru: a planilha preenchida
+        # continua disponível no botão ao lado.
+        log.error("Falha ao gerar o PDF da conferência (%s): %s\n%s",
+                  origem, exc, traceback.format_exc())
+        return render_template(
+            "erro.html", titulo="Erro ao gerar o PDF",
+            mensagem=("Não foi possível montar o PDF desta conferência. A planilha "
+                      "preenchida continua disponível para download. Detalhes técnicos "
+                      "foram registrados em logs/app.log."),
+        ), 500
+
+    log.info("PDF da conferência gerado (%s, %d bytes).", origem, len(conteudo))
+    return send_file(
+        io.BytesIO(conteudo),
+        as_attachment=True,
+        download_name=conferencia_pdf.nome_arquivo(output_nome),
+        mimetype=_MIMETYPES["pdf"],
+    )
+
+
+@app.route("/resultado/<sid>/pdf")
+def resultado_pdf(sid):
+    """A conferência da operação em PDF — o que a tela mostra, para arquivar."""
+    dados = _sessao_ou_404(sid)
+    resumo = dados.get("resumo")
+    if not resumo:
+        # Sessão que ainda não passou pelo processamento: não existe
+        # conferência para emitir. A tela manda o usuário concluir o mapeamento.
+        return redirect(url_for("mapeamento", sid=sid))
+    return _entregar_conferencia(resumo, dados.get("output_nome"), f"sid={sid}")
+
+
 @app.route("/download/<sid>")
 def download(sid):
     dados = _sessao_ou_404(sid)
@@ -960,7 +1009,8 @@ def download(sid):
 @app.route("/historico")
 def historico_view():
     operacoes = historico.listar_operacoes()
-    # Marca quais saídas ainda existem em disco (podem ter sido limpas após 7 dias).
+    # As saídas não expiram mais, mas podem ter sido apagadas à mão: a tela
+    # mostra o botão só quando o arquivo está mesmo lá.
     for op in operacoes:
         nome = op.get("output_nome") or ""
         op["disponivel"] = bool(nome) and (OUTPUTS_DIR / nome).exists()
@@ -978,6 +1028,25 @@ def historico_remover(op_id):
     return redirect(url_for("historico_view"))
 
 
+@app.route("/historico/<op_id>/pdf")
+def historico_pdf(op_id):
+    """A mesma conferência, reemitida a partir do histórico.
+
+    A sessão de trabalho expira em 24h; o retrato guardado no histórico é o
+    que permite emitir este PDF meses depois, sem reprocessar nada. Operações
+    registradas antes deste recurso não têm retrato — a tela não oferece o
+    botão, e aqui a resposta é 404 em vez de um documento vazio que pareceria
+    uma conferência de valores zerados.
+    """
+    op = historico.buscar_operacao(op_id)
+    if not op:
+        abort(404)
+    retrato = historico.carregar_retrato(op_id)
+    if not retrato:
+        abort(404)
+    return _entregar_conferencia(retrato, op.get("output_nome"), f"op={op_id}")
+
+
 @app.route("/historico/<op_id>/graficos")
 def historico_graficos(op_id):
     op = historico.buscar_operacao(op_id)
@@ -991,8 +1060,8 @@ def historico_exportar():
     """Gera o relatório consolidado das operações marcadas na tela.
 
     O arquivo é montado em memória e entregue direto: nada é gravado em
-    `outputs/`, que é varrido a cada 7 dias e existe para as planilhas
-    preenchidas — um relatório é derivado, refazê-lo custa um clique.
+    `outputs/`, que existe para as planilhas preenchidas — um relatório é
+    derivado do histórico, e refazê-lo custa um clique.
     """
     ids = request.form.getlist("ids")
     if len(ids) > relatorio.MAX_OPERACOES:

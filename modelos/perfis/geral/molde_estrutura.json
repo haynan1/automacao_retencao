@@ -1,0 +1,89 @@
+{
+  "versao": 1,
+  "titulo": "GERAL",
+  "subtitulo": "MASTER PLANILHA",
+  "abas": [
+    "PLANILHA GERAL"
+  ],
+  "colunas": [
+    "ARSEM",
+    "CEF",
+    "IRRF S/ 13º SALÁRIO",
+    "IR",
+    "SINTEGO",
+    "SINDSAUDE",
+    "ITAU",
+    "BRADESCO",
+    "FUNPRECOR",
+    "SINDCASE",
+    "INSS S/ 13º SALÁRIO",
+    "INSS",
+    "IPARV",
+    "FUNPREV",
+    "FUMPRU",
+    "DETERMINAÇÃO JUDICIAL",
+    "EMP. PREV.",
+    "PREVPLAN",
+    "IPASI",
+    "PARAUNAPREV",
+    "BRASILPREV",
+    "PREVJUS",
+    "AURIPREVI",
+    "FUNPRES",
+    "PREVFAINA",
+    "PALMEIRASPREV",
+    "PREVIBELOS",
+    "IPASGO",
+    "IPASGO DEPENDENTES",
+    "BB - BRASIL",
+    "DEVOLUÇÃO DE AD. 13º",
+    "DEV. VALOR RECEBIDO INDEVIDO"
+  ],
+  "setores": [
+    {
+      "nome": "FUNDEB 30%",
+      "apelido": ""
+    },
+    {
+      "nome": "FUNDEB 70%",
+      "apelido": ""
+    },
+    {
+      "nome": "FMS",
+      "apelido": "SAUDE"
+    },
+    {
+      "nome": "FME",
+      "apelido": "EDUCAÇÃO"
+    },
+    {
+      "nome": "CULTURA",
+      "apelido": ""
+    },
+    {
+      "nome": "MEIO AMBIENTE",
+      "apelido": ""
+    },
+    {
+      "nome": "PREFEITURA",
+      "apelido": ""
+    },
+    {
+      "nome": "ASSISTENCIA SOCIAL",
+      "apelido": "FMAS"
+    }
+  ],
+  "tipos": [
+    "Mensal",
+    "13º salário",
+    "Férias",
+    "Rescisão",
+    "Complementar"
+  ],
+  "opcoes": {
+    "coluna_total_evento": true,
+    "linha_total_bloco": true,
+    "linha_total_geral": true,
+    "rodape_apelido": true
+  }
+}

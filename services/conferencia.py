@@ -193,6 +193,25 @@ _BORDA = estilo.BORDA
 _MOEDA = estilo.MOEDA
 _LARGURA = 4  # colunas da aba: item | destino | valor | motivo
 
+# As linhas da reconciliacao: (rotulo, chave, e_destaque). Publico porque e
+# CONTRATO entre as tres superficies que mostram a mesma conta — a aba de
+# conferencia (aqui), a tela de resultado e o PDF da conferencia. Se cada uma
+# escolhesse suas linhas, a soma de uma nao fecharia na outra.
+#
+# 'Sem lugar na planilha' entra na lista: `total_preenchido` ja vem descontado
+# dele (ver `reconciliar`), entao omiti-lo faria as linhas somarem MENOS que o
+# total lido — e quem confere na mao acusaria uma divergencia inexistente.
+LINHAS_RECONCILIACAO = (
+    ("Total lido (bruto)", "total_lido", True),
+    ("Total preenchido na planilha", "total_preenchido", True),
+    ("Sem lugar na planilha (estrutura)", "total_estrutura", False),
+    ("Fora de escopo — rubrica (ignorado)", "total_fora_escopo", False),
+    ("Fora de escopo — folha (ignorado)", "total_folha_fora_escopo", False),
+    ("Sem vínculo (evento sem coluna)", "total_sem_vinculo", False),
+    ("Sem vínculo (folha sem linha)", "total_folha_sem_vinculo", False),
+    ("Setor não mapeado", "total_setor_nao_mapeado", False),
+)
+
 
 def criar_aba_conferencia(wb, dados: dict) -> None:
     nome = "CONFERÊNCIA_AUTOMAÇÃO"
@@ -229,17 +248,9 @@ def criar_aba_conferencia(wb, dados: dict) -> None:
     c.fill = _FILL_OK if rec["confere"] else _FILL_ALERTA
     ws.merge_cells(start_row=linha, start_column=1, end_row=linha, end_column=4)
     linha += 1
-    for rotulo, chave in (
-        ("Total lido (bruto)", "total_lido"),
-        ("Total preenchido na planilha", "total_preenchido"),
-        ("Fora de escopo — rubrica (ignorado)", "total_fora_escopo"),
-        ("Fora de escopo — folha (ignorado)", "total_folha_fora_escopo"),
-        ("Sem vínculo (evento sem coluna)", "total_sem_vinculo"),
-        ("Sem vínculo (folha sem linha)", "total_folha_sem_vinculo"),
-        ("Setor não mapeado", "total_setor_nao_mapeado"),
-    ):
-        ws.cell(row=linha, column=1, value=rotulo).font = Font(bold=(chave in ("total_lido", "total_preenchido")))
-        cc = ws.cell(row=linha, column=2, value=float(rec[chave]))
+    for rotulo, chave, destaque in LINHAS_RECONCILIACAO:
+        ws.cell(row=linha, column=1, value=rotulo).font = Font(bold=destaque)
+        cc = ws.cell(row=linha, column=2, value=float(rec.get(chave, _ZERO)))
         cc.number_format = _MOEDA
         linha += 1
     linha += 1
@@ -316,7 +327,10 @@ def _tabela_valor(ws, linha, titulo, dados: dict):
     return linha + 2
 
 
-_ROTULO_STATUS = {
+# Como cada status de vinculo se le por extenso. Publico pelo mesmo motivo
+# de LINHAS_RECONCILIACAO: a aba e o PDF explicam a MESMA decisao, e duas
+# traducoes do mesmo status fariam os dois documentos parecerem discordar.
+ROTULO_STATUS = {
     "ok": "definido",
     "regra": "deduzido por regra",
     "sugerido": "sugerido pelo sistema",
@@ -348,7 +362,7 @@ def _tabela_decisao(ws, linha, titulo, grupos: list, cab_item: str, cab_destino:
         ws.cell(row=linha, column=2, value=estilo.texto_seguro(destino)).border = _BORDA
         cc = ws.cell(row=linha, column=3, value=float(grupo.get("total", _ZERO)))
         cc.number_format, cc.border = _MOEDA, _BORDA
-        status = _ROTULO_STATUS.get(grupo.get("status"), grupo.get("status") or "")
+        status = ROTULO_STATUS.get(grupo.get("status"), grupo.get("status") or "")
         motivo = grupo.get("motivo") or ""
         cel = ws.cell(row=linha, column=4,
                       value=estilo.texto_seguro(f"{status} — {motivo}" if motivo else status))

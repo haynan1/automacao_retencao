@@ -1,0 +1,61 @@
+{
+  "versao": 1,
+  "titulo": "PREFEITURA",
+  "subtitulo": "MODELO DE RETENÇÕES",
+  "abas": [
+    "PREFEITURA"
+  ],
+  "colunas": [
+    "ARSEM",
+    "CEF",
+    "IRRF S/ 13º SALÁRIO",
+    "IR",
+    "SINTEGO",
+    "SINDSAUDE",
+    "ITAU",
+    "BRADESCO",
+    "FUNPRECOR",
+    "SINDCASE",
+    "INSS S/ 13º SALÁRIO",
+    "INSS",
+    "IPARV",
+    "FUNPREV",
+    "FUMPRU",
+    "DETERMINAÇÃO JUDICIAL",
+    "EMP. PREV.",
+    "PREVPLAN",
+    "IPASI",
+    "PARAUNAPREV",
+    "BRASILPREV",
+    "PREVJUS",
+    "AURIPREVI",
+    "FUNPRES",
+    "PREVFAINA",
+    "PALMEIRASPREV",
+    "PREVIBELOS",
+    "IPASGO",
+    "IPASGO DEPENDENTES",
+    "BB - BRASIL",
+    "DEVOLUÇÃO DE AD. 13º",
+    "DEV. VALOR RECEBIDO INDEVIDO"
+  ],
+  "setores": [
+    {
+      "nome": "PREFEITURA",
+      "apelido": ""
+    }
+  ],
+  "tipos": [
+    "Mensal",
+    "13º salário",
+    "Férias",
+    "Rescisão",
+    "Complementar"
+  ],
+  "opcoes": {
+    "coluna_total_evento": true,
+    "linha_total_bloco": true,
+    "linha_total_geral": true,
+    "rodape_apelido": true
+  }
+}

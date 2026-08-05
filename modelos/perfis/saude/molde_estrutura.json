@@ -1,0 +1,114 @@
+{
+  "versao": 1,
+  "titulo": "PREFEITURA DE SÃO LUÍS DE MONTES BELOS — DEPARTAMENTO PESSOAL",
+  "subtitulo": "MODELO DE RETENÇÕES — BASE ZERADA",
+  "abas": [
+    "MOLDE",
+    "Cópia de MODELO_RETENCAO"
+  ],
+  "colunas": [
+    "ARSEM",
+    "CEF",
+    "IR",
+    "SINDSAÚDE",
+    "ITAÚ",
+    "PREVIBELOS",
+    "IPASGO DEPENDENTES",
+    "IPASGO",
+    "BRADESCO",
+    "SALÁRIO FAMÍLIA INSS",
+    "SALÁRIO FAMÍLIA PREVIBELOS",
+    "CRÉDITO MENSALIDADE IPASGO",
+    "CRÉD. MENSAL. IPASGO - MES ANTERIOR",
+    "IPARV",
+    "DETERMINAÇÃO JUDICIAL",
+    "SINDACSE",
+    "BB",
+    "FUNPRECOR",
+    "BRASIL PREV",
+    "PARAÚNA PREV",
+    "PREVFAINA",
+    "IPASI",
+    "AURIPREVI",
+    "DEVOLUÇÃO DE AD. 13º"
+  ],
+  "setores": [
+    {
+      "nome": "ADMINISTRATIVO",
+      "apelido": "ADM"
+    },
+    {
+      "nome": "ACS",
+      "apelido": "ACS"
+    },
+    {
+      "nome": "CAPS",
+      "apelido": "CAPS"
+    },
+    {
+      "nome": "CEO",
+      "apelido": "CEO"
+    },
+    {
+      "nome": "CER",
+      "apelido": "CER"
+    },
+    {
+      "nome": "CISO II",
+      "apelido": "CISO II"
+    },
+    {
+      "nome": "REGULAÇÃO",
+      "apelido": "REGULAÇÃO"
+    },
+    {
+      "nome": "EMAD",
+      "apelido": "EMAD"
+    },
+    {
+      "nome": "NASF",
+      "apelido": "NASF"
+    },
+    {
+      "nome": "NÚCLEO DE VETORES",
+      "apelido": "NUCLEO DE VET."
+    },
+    {
+      "nome": "VIGILÂNCIA EPIDEMIOLÓGICA",
+      "apelido": "VIGILANCIA EPID."
+    },
+    {
+      "nome": "POSTO CENTRAL",
+      "apelido": "POSTO CENTRAL"
+    },
+    {
+      "nome": "PSF",
+      "apelido": "PSF"
+    },
+    {
+      "nome": "SAMU",
+      "apelido": "SAMU"
+    },
+    {
+      "nome": "SAÚDE BUCAL",
+      "apelido": "SAÚDE BUCAL"
+    },
+    {
+      "nome": "VIGILÂNCIA SANITÁRIA",
+      "apelido": "VIGILÂNCIA SAN."
+    }
+  ],
+  "tipos": [
+    "Mensal",
+    "13º salário",
+    "Férias",
+    "Rescisão",
+    "Complementar"
+  ],
+  "opcoes": {
+    "coluna_total_evento": true,
+    "linha_total_bloco": true,
+    "linha_total_geral": true,
+    "rodape_apelido": true
+  }
+}

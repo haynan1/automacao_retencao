@@ -234,3 +234,117 @@ def test_botoes_de_exportar_nascem_desabilitados(cliente):
         marcador = f'name="formato" value="{formato}"'
         botao = html[html.index("<button", html.index(marcador) - 400):]
         assert "disabled" in botao[:botao.index(">")], f"botão {formato} nasce habilitado"
+
+
+# ---------------------------------------------------------------------------
+# A conferência de uma operação, reemitida pelo histórico
+# ---------------------------------------------------------------------------
+
+_RETRATO = {
+    "competencia": "07/2026", "perfil_nome": "Secretaria de Cultura",
+    "aba_destino": "SEC CULTURA", "output_nome": "RETENCAO_PREENCHIDA_20260805_141815.xlsx",
+    "qtd_celulas": 7,
+    "reconciliacao": {
+        "total_lido": "1500.00", "total_preenchido": "1500.00", "total_estrutura": "0.00",
+        "total_fora_escopo": "0.00", "total_folha_fora_escopo": "0.00",
+        "total_sem_vinculo": "0.00", "total_folha_sem_vinculo": "0.00",
+        "total_setor_nao_mapeado": "0.00", "diferenca": "0.00", "confere": True,
+    },
+    "por_setor": {"ACS": "1500.00"}, "por_coluna": {"CEF": "1500.00"},
+    "por_tipo": {"Mensal": "1500.00"},
+    "decisoes_folhas": [{"rotulo": "MENSAL", "tipo": "Mensal", "total": "1500.00",
+                         "status": "ok", "motivo": "nome igual ao da linha"}],
+    "decisoes_rubricas": [], "pendencias_estrutura": [],
+}
+
+
+@pytest.fixture
+def cliente_com_retrato(historico_tmp):
+    historico_tmp.registrar_operacao({
+        "id": "comretrato", "perfil_nome": "Secretaria de Cultura",
+        "competencia": "07/2026", "aba_destino": "SEC CULTURA",
+        "output_nome": "RETENCAO_PREENCHIDA_20260805_141815.xlsx",
+        "total_lido": "1500.00", "total_preenchido": "1500.00", "confere": True,
+        "retrato": _RETRATO,
+    })
+    historico_tmp.registrar_operacao({
+        "id": "semretrato", "perfil_nome": "Antiga", "competencia": "01/2026",
+        "aba_destino": "X", "total_lido": "10.00", "confere": True,
+    })
+    return app_mod.app.test_client()
+
+
+def test_tela_oferece_o_pdf_so_de_quem_tem_retrato(cliente_com_retrato):
+    html = cliente_com_retrato.get("/historico").get_data(as_text=True)
+    assert "/historico/comretrato/pdf" in html
+    assert "/historico/semretrato/pdf" not in html
+
+
+def test_baixa_a_conferencia_de_uma_operacao_do_historico(cliente_com_retrato):
+    """Meses depois, sem a sessão de trabalho (que expira em 24h)."""
+    import pypdfium2 as pdfium
+
+    resposta = cliente_com_retrato.get("/historico/comretrato/pdf")
+    assert resposta.status_code == 200
+    assert resposta.headers["Content-Type"] == "application/pdf"
+    # O carimbo é o da planilha que ele confere: os dois ficam lado a lado.
+    assert "CONFERENCIA_20260805_141815.pdf" in resposta.headers["Content-Disposition"]
+
+    doc = pdfium.PdfDocument(io.BytesIO(resposta.data))
+    texto = "\n".join(p.get_textpage().get_text_range() for p in doc)
+    assert "CONFERÊNCIA DA AUTOMAÇÃO DE RETENÇÕES" in texto
+    assert "Secretaria de Cultura" in texto and "SEC CULTURA" in texto
+    assert "R$ 1.500,00" in texto and "CONFERE" in texto
+
+
+def test_operacao_anterior_ao_recurso_responde_404(cliente_com_retrato):
+    """Sem retrato não há conferência — melhor 404 que um PDF de zeros."""
+    assert cliente_com_retrato.get("/historico/semretrato/pdf").status_code == 404
+
+
+def test_operacao_inexistente_responde_404(cliente_com_retrato):
+    assert cliente_com_retrato.get("/historico/naoexiste/pdf").status_code == 404
+
+
+@pytest.mark.parametrize("op_id", ["../../app", "..%2f..%2fapp", "....//app"])
+def test_op_id_com_travessia_nao_serve_arquivo(cliente_com_retrato, op_id):
+    resposta = cliente_com_retrato.get(f"/historico/{op_id}/pdf")
+    assert resposta.status_code in (404, 308)
+    assert not resposta.data.startswith(b"%PDF-")
+
+
+def test_apagar_a_operacao_tira_o_pdf_do_ar(cliente_com_retrato):
+    """O dado sai do disco junto com o registro — nada fica para trás."""
+    assert cliente_com_retrato.get("/historico/comretrato/pdf").status_code == 200
+    cliente_com_retrato.post("/historico/comretrato/remover")
+    assert cliente_com_retrato.get("/historico/comretrato/pdf").status_code == 404
+
+
+def test_registro_de_outra_versao_nao_derruba_a_tela(historico_tmp):
+    """Append-only atravessa versões — e agora o registro fica para sempre.
+
+    Uma operação gravada antes de um campo existir não pode levar a tela
+    inteira junto: 200 operações sumiriam por causa de uma.
+    """
+    historico_tmp.registrar_operacao({"id": "arcaica", "competencia": "01/2024"})
+    historico_tmp.registrar_operacao({
+        "id": "atual", "perfil_nome": "Saúde", "competencia": "07/2026",
+        "aba_destino": "ABA", "total_lido": "10.00", "total_preenchido": "10.00",
+        "total_pendente": "0.00", "confere": True, "qtd_celulas": 1,
+    })
+    resposta = app_mod.app.test_client().get("/historico")
+    assert resposta.status_code == 200
+    html = resposta.get_data(as_text=True)
+    assert "01/2024" in html and "07/2026" in html
+
+
+def test_operacao_sem_arquivo_nem_retrato_mostra_traco(historico_tmp):
+    """Estado vazio desenhado: a célula não pode ficar em branco sem explicação."""
+    historico_tmp.registrar_operacao({
+        "id": "nada", "perfil_nome": "Antiga", "competencia": "01/2024",
+        "aba_destino": "X", "total_lido": "10.00", "total_pendente": "0.00",
+        "output_nome": "sumiu_do_disco.xlsx", "confere": True,
+    })
+    html = app_mod.app.test_client().get("/historico").get_data(as_text=True)
+    assert "/historico/nada/pdf" not in html
+    assert "Arquivo removido do disco" in html
