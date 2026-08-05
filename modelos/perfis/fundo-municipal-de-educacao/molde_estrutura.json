@@ -52,7 +52,8 @@
     "Mensal",
     "13º salário",
     "Férias",
-    "Rescisão"
+    "Rescisão",
+    "Complementar"
   ],
   "opcoes": {
     "coluna_total_evento": true,
